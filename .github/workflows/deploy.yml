@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - claude/actor-project-management-app-P1ljj
+  workflow_dispatch:
 
 permissions:
   contents: write
