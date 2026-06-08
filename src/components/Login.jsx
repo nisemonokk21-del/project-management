@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function Login() {
-  const { login } = useAuth();
+  const { login, redirectError } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -32,7 +32,7 @@ export default function Login() {
           <li><span className="feature-icon">💴</span> 交通費記録・月別集計</li>
         </ul>
 
-        {error && <div className="error">{error}</div>}
+        {(error || redirectError) && <div className="error">{error || redirectError}</div>}
 
         <button onClick={handleLogin} className="google-btn" disabled={loading}>
           <svg viewBox="0 0 24 24" className="google-icon" aria-hidden="true">

@@ -14,9 +14,9 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [googleToken, setGoogleToken] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [redirectError, setRedirectError] = useState('');
 
   useEffect(() => {
-    // リダイレクト後にトークンを取得
     getRedirectResult(auth)
       .then((result) => {
         if (result) {
@@ -26,7 +26,9 @@ export function AuthProvider({ children }) {
           }
         }
       })
-      .catch((err) => console.error('Redirect result error:', err));
+      .catch((err) => {
+        setRedirectError(`エラー: ${err.code} — ${err.message}`);
+      });
 
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
@@ -53,7 +55,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, googleToken, login, logout, reauth, loading }}>
+    <AuthContext.Provider value={{ user, googleToken, login, logout, reauth, loading, redirectError }}>
       {!loading && children}
     </AuthContext.Provider>
   );
