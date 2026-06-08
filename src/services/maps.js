@@ -35,11 +35,7 @@ async function getDirections(service, maps, destination, arrivalTime) {
         origin: HOME,
         destination,
         travelMode: maps.TravelMode.TRANSIT,
-        transitOptions: {
-          arrivalTime,
-          modes: [maps.TransitMode.TRAIN, maps.TransitMode.SUBWAY],
-          routingPreference: maps.TransitRoutePreference.FEWER_TRANSFERS,
-        },
+        transitOptions: { arrivalTime },
         region: 'JP',
       },
       (result, status) => {

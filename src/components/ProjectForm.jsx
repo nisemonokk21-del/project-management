@@ -2,13 +2,16 @@ import { useState } from 'react';
 import { findTrainSchedule } from '../services/maps';
 import { combineDateAndTime } from '../utils/timeUtils';
 
-const TODAY = new Date().toISOString().split('T')[0];
+// デフォルトは明日（過去の日時だと電車が見つからないため）
+const tomorrow = new Date();
+tomorrow.setDate(tomorrow.getDate() + 1);
+const TOMORROW = tomorrow.toISOString().split('T')[0];
 
 export default function ProjectForm({ onResult }) {
   const [form, setForm] = useState({
     name: '',
     type: 'オーディション',
-    date: TODAY,
+    date: TOMORROW,
     time: '10:00',
     location: '',
   });
