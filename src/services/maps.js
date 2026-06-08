@@ -28,21 +28,21 @@ export function loadMapsAPI() {
   return mapsLoadPromise;
 }
 
-function searchRoute(service, maps, origin, destination, timeOption) {
+function searchRoute(service, maps, destination, departureTime) {
   return new Promise((resolve, reject) => {
     service.route(
       {
-        origin,
+        origin: HOME,
         destination,
         travelMode: maps.TravelMode.TRANSIT,
-        transitOptions: timeOption,
+        transitOptions: { departureTime },
         region: 'JP',
       },
       (result, status) => {
         if (status === maps.DirectionsStatus.OK) {
           resolve(result);
         } else {
-          reject(Object.assign(new Error(`経路検索エラー: ${status}`), { status }));
+          reject(new Error(`経路検索エラー: ${status}`));
         }
       }
     );
@@ -53,31 +53,48 @@ export async function findTrainSchedule(destination, collectionTime) {
   const maps = await loadMapsAPI();
   const service = new maps.DirectionsService();
 
-  // arrivalTime で検索（集合時刻に間に合う電車を探す）
-  const getByArrival = (t) =>
-    searchRoute(service, maps, HOME, destination, { arrivalTime: t });
+  // 集合時刻の2時間前を基点に、出発時刻で3本分検索する
+  const base = new Date(collectionTime.getTime() - 2 * 60 * 60 * 1000);
 
-  // Train 0: 集合時刻に間に合う最後の電車
-  const r0 = await getByArrival(collectionTime);
+  // Train 0: 基点から出発
+  const r0 = await searchRoute(service, maps, destination, base);
   const leg0 = r0.routes[0].legs[0];
   const dep0 = new Date(leg0.departure_time.value * 1000);
 
-  // Train -1: 1本前
-  const r1 = await getByArrival(new Date(dep0.getTime() - 2 * 60 * 1000));
+  // Train 1: 1本後
+  const r1 = await searchRoute(service, maps, destination, new Date(dep0.getTime() + 2 * 60 * 1000));
   const leg1 = r1.routes[0].legs[0];
   const dep1 = new Date(leg1.departure_time.value * 1000);
 
-  // Train -2: 2本前（実際に乗る電車）
-  const r2 = await getByArrival(new Date(dep1.getTime() - 2 * 60 * 1000));
+  // Train 2: さらに1本後
+  const r2 = await searchRoute(service, maps, destination, new Date(dep1.getTime() + 2 * 60 * 1000));
   const leg2 = r2.routes[0].legs[0];
   const dep2 = new Date(leg2.departure_time.value * 1000);
   const arr2 = new Date(leg2.arrival_time.value * 1000);
 
-  // 起床 = 乗車 - 40分、就寝 = 起床 - 8時間
-  const wakeUpTime = new Date(dep2.getTime() - 40 * 60 * 1000);
+  // 集合時刻に間に合う最後の電車を特定
+  // arr2が集合時刻を超えたらleg1、さらに超えたらleg0を使う
+  let usedLeg = leg2;
+  let usedDep = dep2;
+  let usedArr = arr2;
+
+  if (arr2 > collectionTime) {
+    usedLeg = leg1;
+    usedDep = dep1;
+    usedArr = new Date(leg1.arrival_time.value * 1000);
+    if (usedArr > collectionTime) {
+      usedLeg = leg0;
+      usedDep = dep0;
+      usedArr = new Date(leg0.arrival_time.value * 1000);
+    }
+  }
+
+  // 実際に乗る電車（間に合う電車の2本前）
+  const boardingTime = new Date(base.getTime()); // baseを乗車時刻として使用
+  const wakeUpTime = new Date(boardingTime.getTime() - 40 * 60 * 1000);
   const bedTime = new Date(wakeUpTime.getTime() - 8 * 60 * 60 * 1000);
 
-  const steps = leg2.steps
+  const steps = usedLeg.steps
     .filter((s) => s.transit)
     .map((s) => ({
       line: s.transit.line.short_name || s.transit.line.name,
@@ -91,14 +108,13 @@ export async function findTrainSchedule(destination, collectionTime) {
     }));
 
   return {
-    boardingTime: dep2,
-    arrivalTime: arr2,
+    boardingTime: usedDep,
+    arrivalTime: usedArr,
     wakeUpTime,
     bedTime,
     steps,
-    duration: leg2.duration.text,
-    startAddress: leg2.start_address,
-    endAddress: leg2.end_address,
-    onTimeDep: dep0,
+    duration: usedLeg.duration.text,
+    startAddress: usedLeg.start_address,
+    endAddress: usedLeg.end_address,
   };
 }
