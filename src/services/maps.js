@@ -1,5 +1,5 @@
-// Fixed departure: 練馬区栄町16-3 (江古田エリア)
-const HOME = '東京都練馬区栄町16-3';
+// Fixed departure: 江古田エリア最寄り駅（徒歩5分）
+const HOME = '新桜台駅';
 
 let mapsLoaded = false;
 let mapsLoadPromise = null;
@@ -28,21 +28,21 @@ export function loadMapsAPI() {
   return mapsLoadPromise;
 }
 
-async function getDirections(service, maps, destination, arrivalTime) {
+function searchRoute(service, maps, origin, destination, timeOption) {
   return new Promise((resolve, reject) => {
     service.route(
       {
-        origin: HOME,
+        origin,
         destination,
         travelMode: maps.TravelMode.TRANSIT,
-        transitOptions: { arrivalTime },
+        transitOptions: timeOption,
         region: 'JP',
       },
       (result, status) => {
         if (status === maps.DirectionsStatus.OK) {
           resolve(result);
         } else {
-          reject(new Error(`経路検索エラー: ${status} — 目的地を正しく入力してください`));
+          reject(Object.assign(new Error(`経路検索エラー: ${status}`), { status }));
         }
       }
     );
@@ -53,23 +53,27 @@ export async function findTrainSchedule(destination, collectionTime) {
   const maps = await loadMapsAPI();
   const service = new maps.DirectionsService();
 
-  // Train 0: the latest train that still arrives by collection time
-  const r0 = await getDirections(service, maps, destination, collectionTime);
+  // arrivalTime で検索（集合時刻に間に合う電車を探す）
+  const getByArrival = (t) =>
+    searchRoute(service, maps, HOME, destination, { arrivalTime: t });
+
+  // Train 0: 集合時刻に間に合う最後の電車
+  const r0 = await getByArrival(collectionTime);
   const leg0 = r0.routes[0].legs[0];
   const dep0 = new Date(leg0.departure_time.value * 1000);
 
-  // Train -1: one departure before
-  const r1 = await getDirections(service, maps, destination, new Date(dep0.getTime() - 120_000));
+  // Train -1: 1本前
+  const r1 = await getByArrival(new Date(dep0.getTime() - 2 * 60 * 1000));
   const leg1 = r1.routes[0].legs[0];
   const dep1 = new Date(leg1.departure_time.value * 1000);
 
-  // Train -2: two departures before — the one we actually take
-  const r2 = await getDirections(service, maps, destination, new Date(dep1.getTime() - 120_000));
+  // Train -2: 2本前（実際に乗る電車）
+  const r2 = await getByArrival(new Date(dep1.getTime() - 2 * 60 * 1000));
   const leg2 = r2.routes[0].legs[0];
   const dep2 = new Date(leg2.departure_time.value * 1000);
   const arr2 = new Date(leg2.arrival_time.value * 1000);
 
-  // 起床 = 乗車 - 40分, 就寝 = 起床 - 8時間
+  // 起床 = 乗車 - 40分、就寝 = 起床 - 8時間
   const wakeUpTime = new Date(dep2.getTime() - 40 * 60 * 1000);
   const bedTime = new Date(wakeUpTime.getTime() - 8 * 60 * 60 * 1000);
 
@@ -95,7 +99,6 @@ export async function findTrainSchedule(destination, collectionTime) {
     duration: leg2.duration.text,
     startAddress: leg2.start_address,
     endAddress: leg2.end_address,
-    // For reference: the on-time train departure
     onTimeDep: dep0,
   };
 }
