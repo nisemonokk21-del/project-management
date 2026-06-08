@@ -11,9 +11,9 @@ export default function Login() {
     setError('');
     try {
       await login();
+      // リダイレクト方式のためここには戻ってこない
     } catch (err) {
-      setError('ログインに失敗しました。ポップアップがブロックされていないか確認してください。');
-    } finally {
+      setError('ログインに失敗しました。もう一度お試しください。');
       setLoading(false);
     }
   };

@@ -1,6 +1,12 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { auth } from '../services/firebase';
-import { signInWithPopup, signOut, onAuthStateChanged, GoogleAuthProvider } from 'firebase/auth';
+import {
+  signInWithRedirect,
+  signOut,
+  onAuthStateChanged,
+  GoogleAuthProvider,
+  getRedirectResult,
+} from 'firebase/auth';
 
 const AuthContext = createContext(null);
 
@@ -10,6 +16,18 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // リダイレクト後にトークンを取得
+    getRedirectResult(auth)
+      .then((result) => {
+        if (result) {
+          const credential = GoogleAuthProvider.credentialFromResult(result);
+          if (credential?.accessToken) {
+            setGoogleToken(credential.accessToken);
+          }
+        }
+      })
+      .catch((err) => console.error('Redirect result error:', err));
+
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
       setLoading(false);
@@ -20,10 +38,7 @@ export function AuthProvider({ children }) {
   const login = async () => {
     const provider = new GoogleAuthProvider();
     provider.addScope('https://www.googleapis.com/auth/calendar');
-    const result = await signInWithPopup(auth, provider);
-    const credential = GoogleAuthProvider.credentialFromResult(result);
-    setGoogleToken(credential.accessToken);
-    return result;
+    await signInWithRedirect(auth, provider);
   };
 
   const logout = async () => {
@@ -34,14 +49,7 @@ export function AuthProvider({ children }) {
   const reauth = async () => {
     const provider = new GoogleAuthProvider();
     provider.addScope('https://www.googleapis.com/auth/calendar');
-    try {
-      const result = await signInWithPopup(auth, provider);
-      const credential = GoogleAuthProvider.credentialFromResult(result);
-      setGoogleToken(credential.accessToken);
-      return credential.accessToken;
-    } catch {
-      return null;
-    }
+    await signInWithRedirect(auth, provider);
   };
 
   return (
