@@ -606,6 +606,14 @@ input:focus, select:focus {
 
 .action-col { white-space: nowrap; text-align: right; }
 
+/* ===== Version footer ===== */
+.version-footer {
+  text-align: center;
+  font-size: 11px;
+  color: var(--gray-300);
+  padding: 12px;
+}
+
 /* ===== Responsive ===== */
 @media (max-width: 600px) {
   .header-inner { padding: 0 12px; }
