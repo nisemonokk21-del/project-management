@@ -27,6 +27,9 @@ export function formatDateTime(date) {
 }
 
 export function combineDateAndTime(dateStr, timeStr) {
-  // dateStr: "2024-01-15", timeStr: "09:30" → Date in JST
-  return new Date(`${dateStr}T${timeStr}:00+09:00`);
+  // Safari-safe: タイムゾーン文字列を使わず手動でUTC変換
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const [hour, minute] = timeStr.split(':').map(Number);
+  // JST = UTC+9 なので UTC時刻 = 入力時刻 - 9時間
+  return new Date(Date.UTC(year, month - 1, day, hour - 9, minute, 0));
 }

@@ -28,10 +28,12 @@ export default function ProjectForm({ onResult }) {
     setLoading(true);
     try {
       const collectionTime = combineDateAndTime(form.date, form.time);
+      const debugInfo = ` [${collectionTime.toISOString()}]`;
       const schedule = await findTrainSchedule(form.location, collectionTime);
       onResult({ form: { ...form }, collectionTime, schedule });
     } catch (err) {
-      setError(err.message);
+      const collectionTime = combineDateAndTime(form.date, form.time);
+      setError(`${err.message} [${collectionTime.toISOString()}]`);
     } finally {
       setLoading(false);
     }
