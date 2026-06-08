@@ -35,7 +35,7 @@ function searchRoute(service, maps, destination, departureTime) {
         origin: HOME,
         destination,
         travelMode: maps.TravelMode.TRANSIT,
-        transitOptions: { departureTime },
+        transitOptions: departureTime ? { departureTime } : undefined,
         region: 'JP',
       },
       (result, status) => {
@@ -53,11 +53,16 @@ export async function findTrainSchedule(destination, collectionTime) {
   const maps = await loadMapsAPI();
   const service = new maps.DirectionsService();
 
-  // 集合時刻の2時間前を基点に、出発時刻で3本分検索する
+  // まず時刻なしで検索してAPIが動くか確認、動けば時刻指定で再検索
   const base = new Date(collectionTime.getTime() - 2 * 60 * 60 * 1000);
 
-  // Train 0: 基点から出発
-  const r0 = await searchRoute(service, maps, destination, base);
+  // Train 0: 基点から出発（失敗したら時刻なしで再試行）
+  let r0;
+  try {
+    r0 = await searchRoute(service, maps, destination, base);
+  } catch {
+    r0 = await searchRoute(service, maps, destination, null);
+  }
   const leg0 = r0.routes[0].legs[0];
   const dep0 = new Date(leg0.departure_time.value * 1000);
 

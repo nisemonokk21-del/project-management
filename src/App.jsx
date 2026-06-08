@@ -32,7 +32,7 @@ export default function App() {
         )}
         {activeTab === 'expenses' && <ExpenseManager />}
       </main>
-      <footer className="version-footer">v1.5 — departureTime方式</footer>
+      <footer className="version-footer">v1.6 — フォールバック対応</footer>
     </div>
   );
 }
