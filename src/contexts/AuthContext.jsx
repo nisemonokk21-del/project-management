@@ -1,11 +1,10 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { auth } from '../services/firebase';
 import {
-  signInWithRedirect,
+  signInWithPopup,
   signOut,
   onAuthStateChanged,
   GoogleAuthProvider,
-  getRedirectResult,
 } from 'firebase/auth';
 
 const AuthContext = createContext(null);
@@ -14,22 +13,8 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [googleToken, setGoogleToken] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [redirectError, setRedirectError] = useState('');
 
   useEffect(() => {
-    getRedirectResult(auth)
-      .then((result) => {
-        if (result) {
-          const credential = GoogleAuthProvider.credentialFromResult(result);
-          if (credential?.accessToken) {
-            setGoogleToken(credential.accessToken);
-          }
-        }
-      })
-      .catch((err) => {
-        setRedirectError(`エラー: ${err.code} — ${err.message}`);
-      });
-
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
       setLoading(false);
@@ -40,7 +25,9 @@ export function AuthProvider({ children }) {
   const login = async () => {
     const provider = new GoogleAuthProvider();
     provider.addScope('https://www.googleapis.com/auth/calendar');
-    await signInWithRedirect(auth, provider);
+    const result = await signInWithPopup(auth, provider);
+    const credential = GoogleAuthProvider.credentialFromResult(result);
+    if (credential?.accessToken) setGoogleToken(credential.accessToken);
   };
 
   const logout = async () => {
@@ -51,11 +38,15 @@ export function AuthProvider({ children }) {
   const reauth = async () => {
     const provider = new GoogleAuthProvider();
     provider.addScope('https://www.googleapis.com/auth/calendar');
-    await signInWithRedirect(auth, provider);
+    const result = await signInWithPopup(auth, provider);
+    const credential = GoogleAuthProvider.credentialFromResult(result);
+    const token = credential?.accessToken || null;
+    if (token) setGoogleToken(token);
+    return token;
   };
 
   return (
-    <AuthContext.Provider value={{ user, googleToken, login, logout, reauth, loading, redirectError }}>
+    <AuthContext.Provider value={{ user, googleToken, login, logout, reauth, loading }}>
       {!loading && children}
     </AuthContext.Provider>
   );
