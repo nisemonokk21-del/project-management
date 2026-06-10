@@ -159,6 +159,11 @@ export default function ProjectResult({ result, onReset }) {
           <p className="loading-text"><span className="spinner" /> カレンダーを確認中...</p>
         ) : (
           <>
+            {!calendarChecked && (
+              <button onClick={checkCalendar} className="btn-secondary" style={{ marginBottom: '12px' }}>
+                📅 カレンダーの被りを確認する
+              </button>
+            )}
             {calendarChecked && (
               conflicts.length > 0 ? (
                 <div className="conflict-box">
