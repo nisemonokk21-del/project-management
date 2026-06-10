@@ -12,21 +12,22 @@ import {
   query,
   serverTimestamp,
 } from 'firebase/firestore';
+import { jstDateString } from '../utils/timeUtils';
 
 const MONTHS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'];
 
-const emptyForm = {
-  date: new Date().toISOString().split('T')[0],
+const makeEmptyForm = () => ({
+  date: jstDateString(0),
   projectName: '',
   from: '',
   to: '',
   amount: '',
-};
+});
 
 export default function ExpenseManager() {
   const { user } = useAuth();
   const [expenses, setExpenses] = useState([]);
-  const [form, setForm] = useState(emptyForm);
+  const [form, setForm] = useState(makeEmptyForm);
   const [editId, setEditId] = useState(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -35,10 +36,6 @@ export default function ExpenseManager() {
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
 
   const collRef = user ? collection(db, 'users', user.uid, 'expenses') : null;
-
-  useEffect(() => {
-    if (user) loadExpenses();
-  }, [user, selectedMonth, selectedYear]);
 
   const loadExpenses = async () => {
     if (!collRef) return;
@@ -55,6 +52,12 @@ export default function ExpenseManager() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (user) loadExpenses();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, selectedMonth, selectedYear]);
 
   const handleChange = (e) =>
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -78,7 +81,7 @@ export default function ExpenseManager() {
       } else {
         await addDoc(collRef, { ...data, createdAt: serverTimestamp() });
       }
-      setForm(emptyForm);
+      setForm(makeEmptyForm());
       loadExpenses();
     } catch (err) {
       alert('保存に失敗しました: ' + err.message);
@@ -107,7 +110,7 @@ export default function ExpenseManager() {
 
   const cancelEdit = () => {
     setEditId(null);
-    setForm(emptyForm);
+    setForm(makeEmptyForm());
   };
 
   const total = expenses.reduce((s, e) => s + (e.amount || 0), 0);

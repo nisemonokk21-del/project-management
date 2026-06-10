@@ -1,43 +1,39 @@
 import { useState } from 'react';
-import { findTrainSchedule } from '../services/maps';
-import { combineDateAndTime } from '../utils/timeUtils';
-
-// デフォルトは明日（過去の日時だと電車が見つからないため）
-const tomorrow = new Date();
-tomorrow.setDate(tomorrow.getDate() + 1);
-const TOMORROW = tomorrow.toISOString().split('T')[0];
+import { combineDateAndTime, buildSchedule, jstDateString } from '../utils/timeUtils';
+import { yahooTransitUrl, googleMapsTransitUrl, ORIGIN_STATION } from '../services/transitLinks';
 
 export default function ProjectForm({ onResult }) {
   const [form, setForm] = useState({
     name: '',
     type: 'オーディション',
-    date: TOMORROW,
+    date: jstDateString(1), // デフォルトは明日
     time: '10:00',
     location: '',
+    boardingTime: '',
   });
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   const handleChange = (e) => {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
     setError('');
-    setLoading(true);
-    try {
-      const collectionTime = combineDateAndTime(form.date, form.time);
-      const debugInfo = ` [${collectionTime.toISOString()}]`;
-      const schedule = await findTrainSchedule(form.location, collectionTime);
-      onResult({ form: { ...form }, collectionTime, schedule });
-    } catch (err) {
-      const collectionTime = combineDateAndTime(form.date, form.time);
-      setError(`${err.message} [${collectionTime.toISOString()}]`);
-    } finally {
-      setLoading(false);
+
+    const collectionTime = combineDateAndTime(form.date, form.time);
+    const boardingTime = combineDateAndTime(form.date, form.boardingTime);
+
+    if (boardingTime >= collectionTime) {
+      setError('乗車時刻は集合時刻より前にしてください');
+      return;
     }
+
+    const schedule = buildSchedule(boardingTime);
+    onResult({ form: { ...form }, collectionTime, schedule });
   };
+
+  const canSearchRoute = form.location.trim() !== '';
 
   return (
     <div className="card">
@@ -110,17 +106,51 @@ export default function ProjectForm({ onResult }) {
             placeholder="例：渋谷区渋谷1-1-1 / 渋谷駅"
             required
           />
-          <span className="hint">出発地：練馬区栄町16-3（江古田）固定</span>
+          <span className="hint">出発駅：{ORIGIN_STATION}駅（自宅から徒歩5分）固定</span>
+        </div>
+
+        <div className="form-group transit-section">
+          <label htmlFor="boardingTime">乗車時刻（{ORIGIN_STATION}駅 発）</label>
+          <div className="transit-links">
+            <a
+              href={canSearchRoute ? yahooTransitUrl(form.location, form.date, form.time) : undefined}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`transit-link${canSearchRoute ? '' : ' disabled'}`}
+              aria-disabled={!canSearchRoute}
+              onClick={(e) => { if (!canSearchRoute) e.preventDefault(); }}
+            >
+              🔍 Yahoo!乗換案内で調べる
+            </a>
+            <a
+              href={canSearchRoute ? googleMapsTransitUrl(form.location) : undefined}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`transit-link${canSearchRoute ? '' : ' disabled'}`}
+              aria-disabled={!canSearchRoute}
+              onClick={(e) => { if (!canSearchRoute) e.preventDefault(); }}
+            >
+              🗺️ Googleマップで調べる
+            </a>
+          </div>
+          <input
+            id="boardingTime"
+            type="time"
+            name="boardingTime"
+            value={form.boardingTime}
+            onChange={handleChange}
+            required
+          />
+          <span className="hint">
+            上のリンクで集合時刻に間に合う電車を確認して、乗る電車の出発時刻を入力
+            （余裕を持つなら1〜2本前がおすすめ）
+          </span>
         </div>
 
         {error && <div className="error">⚠️ {error}</div>}
 
-        <button type="submit" className="btn-primary" disabled={loading}>
-          {loading ? (
-            <><span className="spinner" /> 電車を検索中...</>
-          ) : (
-            '🚃 スケジュール計算'
-          )}
+        <button type="submit" className="btn-primary">
+          🚃 スケジュール計算
         </button>
       </form>
     </div>

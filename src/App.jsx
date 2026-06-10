@@ -32,7 +32,7 @@ export default function App() {
         )}
         {activeTab === 'expenses' && <ExpenseManager />}
       </main>
-      <footer className="version-footer">v1.7 — Safari日付修正</footer>
+      <footer className="version-footer">v2.0 — 乗車時刻入力方式</footer>
     </div>
   );
 }

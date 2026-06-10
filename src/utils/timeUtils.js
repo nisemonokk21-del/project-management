@@ -33,3 +33,18 @@ export function combineDateAndTime(dateStr, timeStr) {
   // JST = UTC+9 なので UTC時刻 = 入力時刻 - 9時間
   return new Date(Date.UTC(year, month - 1, day, hour - 9, minute, 0));
 }
+
+// JST基準で今日からn日後の日付を YYYY-MM-DD で返す
+// （toISOString()はUTC基準のため深夜0〜9時に日付がずれる問題を回避）
+export function jstDateString(daysFromToday = 0) {
+  const jst = new Date(Date.now() + (9 * 60 + daysFromToday * 24 * 60) * 60 * 1000);
+  return jst.toISOString().split('T')[0];
+}
+
+// 乗車時刻から起床・就寝時刻を逆算
+// 起床 = 乗車40分前（支度＋駅まで徒歩5分込み）、就寝 = 起床の8時間前
+export function buildSchedule(boardingTime) {
+  const wakeUpTime = new Date(boardingTime.getTime() - 40 * 60 * 1000);
+  const bedTime = new Date(wakeUpTime.getTime() - 8 * 60 * 60 * 1000);
+  return { boardingTime, wakeUpTime, bedTime };
+}

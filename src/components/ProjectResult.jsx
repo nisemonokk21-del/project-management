@@ -8,6 +8,7 @@ import {
   buildBedEvent,
 } from '../services/calendar';
 import { formatTime, formatDate, formatDateTime } from '../utils/timeUtils';
+import { yahooTransitUrl, ORIGIN_STATION } from '../services/transitLinks';
 
 export default function ProjectResult({ result, onReset }) {
   const { googleToken, reauth } = useAuth();
@@ -19,10 +20,6 @@ export default function ProjectResult({ result, onReset }) {
   const [calError, setCalError] = useState('');
 
   const { form, collectionTime, schedule } = result;
-
-  useEffect(() => {
-    if (googleToken) checkCalendar();
-  }, []);
 
   const getToken = async () => {
     if (googleToken) return googleToken;
@@ -57,6 +54,13 @@ export default function ProjectResult({ result, onReset }) {
       setCalendarLoading(false);
     }
   };
+
+  useEffect(() => {
+    // 初回マウント時のみ実行
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (googleToken) checkCalendar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleAddToCalendar = async () => {
     setAddLoading(true);
@@ -120,13 +124,7 @@ export default function ProjectResult({ result, onReset }) {
           <div className="tl-item tl-board">
             <div className="tl-time">{formatTime(schedule.boardingTime)}</div>
             <div className="tl-dot" />
-            <div className="tl-label">🚃 乗車（集合の2本前）</div>
-          </div>
-          <div className="tl-line" />
-          <div className="tl-item tl-arrive">
-            <div className="tl-time">{formatTime(schedule.arrivalTime)}</div>
-            <div className="tl-dot" />
-            <div className="tl-label">📍 到着</div>
+            <div className="tl-label">🚃 {ORIGIN_STATION}駅 乗車</div>
           </div>
           <div className="tl-line tl-line-dashed" />
           <div className="tl-item tl-collect">
@@ -136,29 +134,15 @@ export default function ProjectResult({ result, onReset }) {
           </div>
         </div>
 
-        {schedule.steps.length > 0 && (
-          <div className="train-steps">
-            <h4>乗り換え案内</h4>
-            {schedule.steps.map((step, i) => (
-              <div key={i} className="step">
-                <div className="step-header">
-                  <span className="step-dep-time">{formatTime(step.departure)}</span>
-                  <span className="step-stop">{step.depStop}</span>
-                  <span className="step-line">{step.vehicle} {step.line}</span>
-                  <span className="step-dir">{step.headsign}方面</span>
-                </div>
-                <div className="step-body">
-                  <span className="step-count">{step.numStops}駅</span>
-                  <span className="step-arr-time">{formatTime(step.arrival)}</span>
-                  <span className="step-stop">{step.arrStop}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
         <div className="route-note">
-          所要時間: {schedule.duration} ／ 出発地: 練馬区栄町16-3
+          出発駅: {ORIGIN_STATION}駅（自宅から徒歩5分）／{' '}
+          <a
+            href={yahooTransitUrl(form.location, form.date, form.time)}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            経路をもう一度確認する
+          </a>
         </div>
       </div>
 
@@ -197,15 +181,15 @@ export default function ProjectResult({ result, onReset }) {
               <h4>追加するイベント（3件）</h4>
               <div className="preview-item">
                 <span className={`ev-dot ${form.type === 'オーディション' ? 'ev-blue' : 'ev-green'}`} />
-                【{form.type}】{form.name}　{formatTime(collectionTime)}〜
+                【{form.type}】{form.name}{'　'}{formatTime(collectionTime)}〜
               </div>
               <div className="preview-item">
                 <span className="ev-dot ev-yellow" />
-                起床【{form.name}】　{formatTime(schedule.wakeUpTime)}
+                起床【{form.name}】{'　'}{formatTime(schedule.wakeUpTime)}
               </div>
               <div className="preview-item">
                 <span className="ev-dot ev-teal" />
-                就寝【{form.name}】　{formatTime(schedule.bedTime)}
+                就寝【{form.name}】{'　'}{formatTime(schedule.bedTime)}
               </div>
             </div>
 
