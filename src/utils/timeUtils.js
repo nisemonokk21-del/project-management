@@ -42,9 +42,10 @@ export function jstDateString(daysFromToday = 0) {
 }
 
 // 乗車時刻から起床・就寝時刻を逆算
-// 起床 = 乗車40分前（支度＋駅まで徒歩5分込み）、就寝 = 起床の8時間前
-export function buildSchedule(boardingTime) {
-  const wakeUpTime = new Date(boardingTime.getTime() - 40 * 60 * 1000);
+// 起床 = 乗車(35 + 徒歩時間)分前（支度35分＋駅まで徒歩時間）、就寝 = 起床の8時間前
+export function buildSchedule(boardingTime, walkMin = 5) {
+  const prepMin = 35 + walkMin;
+  const wakeUpTime = new Date(boardingTime.getTime() - prepMin * 60 * 1000);
   const bedTime = new Date(wakeUpTime.getTime() - 8 * 60 * 60 * 1000);
   return { boardingTime, wakeUpTime, bedTime };
 }

@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - claude/actor-project-management-app-P1ljj
+      - claude/actor-project-management-app-x121lo
       - claude/continuation-nxpzcg
   workflow_dispatch:
 

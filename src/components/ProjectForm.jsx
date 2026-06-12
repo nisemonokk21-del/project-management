@@ -1,14 +1,15 @@
 import { useState } from 'react';
 import { combineDateAndTime, buildSchedule, jstDateString } from '../utils/timeUtils';
-import { yahooTransitUrl, googleMapsTransitUrl, ORIGIN_STATION } from '../services/transitLinks';
+import { yahooTransitUrl, googleMapsTransitUrl, STATIONS, DEFAULT_STATION } from '../services/transitLinks';
 
 export default function ProjectForm({ onResult }) {
   const [form, setForm] = useState({
     name: '',
     type: 'オーディション',
-    date: jstDateString(1), // デフォルトは明日
+    date: jstDateString(1),
     time: '10:00',
     location: '',
+    station: DEFAULT_STATION,
     boardingTime: '',
   });
   const [error, setError] = useState('');
@@ -29,8 +30,9 @@ export default function ProjectForm({ onResult }) {
       return;
     }
 
-    const schedule = buildSchedule(boardingTime);
-    onResult({ form: { ...form }, collectionTime, schedule });
+    const stationInfo = STATIONS.find((s) => s.name === form.station) || STATIONS[0];
+    const schedule = buildSchedule(boardingTime, stationInfo.walkMin);
+    onResult({ form: { ...form }, collectionTime, schedule, stationInfo });
   };
 
   const canSearchRoute = form.location.trim() !== '';
@@ -106,14 +108,32 @@ export default function ProjectForm({ onResult }) {
             placeholder="例：渋谷区渋谷1-1-1 / 渋谷駅"
             required
           />
-          <span className="hint">出発駅：{ORIGIN_STATION}駅（自宅から徒歩5分）固定</span>
+        </div>
+
+        <div className="form-group">
+          <label>出発駅</label>
+          <div className="station-group">
+            {STATIONS.map((s) => (
+              <label key={s.name} className={`station-label${form.station === s.name ? ' selected' : ''}`}>
+                <input
+                  type="radio"
+                  name="station"
+                  value={s.name}
+                  checked={form.station === s.name}
+                  onChange={handleChange}
+                />
+                <span className="station-name">{s.name}駅</span>
+                <span className="station-meta">徒歩{s.walkMin}分・{s.line}</span>
+              </label>
+            ))}
+          </div>
         </div>
 
         <div className="form-group transit-section">
-          <label htmlFor="boardingTime">乗車時刻（{ORIGIN_STATION}駅 発）</label>
+          <label htmlFor="boardingTime">乗車時刻（{form.station}駅 発）</label>
           <div className="transit-links">
             <a
-              href={canSearchRoute ? yahooTransitUrl(form.location, form.date, form.time) : undefined}
+              href={canSearchRoute ? yahooTransitUrl(form.station, form.location, form.date, form.time) : undefined}
               target="_blank"
               rel="noopener noreferrer"
               className={`transit-link${canSearchRoute ? '' : ' disabled'}`}
@@ -123,7 +143,7 @@ export default function ProjectForm({ onResult }) {
               🔍 Yahoo!乗換案内で調べる
             </a>
             <a
-              href={canSearchRoute ? googleMapsTransitUrl(form.location) : undefined}
+              href={canSearchRoute ? googleMapsTransitUrl(form.station, form.location) : undefined}
               target="_blank"
               rel="noopener noreferrer"
               className={`transit-link${canSearchRoute ? '' : ' disabled'}`}
@@ -142,8 +162,7 @@ export default function ProjectForm({ onResult }) {
             required
           />
           <span className="hint">
-            上のリンクで集合時刻に間に合う電車を確認して、乗る電車の出発時刻を入力
-            （余裕を持つなら1〜2本前がおすすめ）
+            上のリンクで集合時刻に間に合う電車を確認し、2本前の電車の出発時刻を入力してください
           </span>
         </div>
 

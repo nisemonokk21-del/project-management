@@ -625,6 +625,33 @@ input:focus, select:focus {
   .login-card { padding: 28px 20px; }
 }
 
+/* ===== Station selector ===== */
+.station-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.station-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1.5px solid var(--gray-200);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+
+.station-label:hover { background: var(--gray-50); border-color: var(--gray-300); }
+.station-label.selected { border-color: var(--primary); background: var(--primary-light); }
+
+.station-label input[type="radio"] { width: auto; accent-color: var(--primary); flex-shrink: 0; }
+
+.station-name { font-weight: 600; font-size: 14px; }
+
+.station-meta { font-size: 12px; color: var(--gray-500); margin-left: auto; }
+
 /* ===== Transit links (乗換検索) ===== */
 .transit-section { gap: 8px; }
 .transit-links { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }

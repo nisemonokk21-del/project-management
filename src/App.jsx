@@ -32,7 +32,7 @@ export default function App() {
         )}
         {activeTab === 'expenses' && <ExpenseManager />}
       </main>
-      <footer className="version-footer">v2.0 — 乗車時刻入力方式</footer>
+      <footer className="version-footer">v3.0 — 3駅対応・徒歩時間連動</footer>
     </div>
   );
 }

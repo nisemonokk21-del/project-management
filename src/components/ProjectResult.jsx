@@ -8,7 +8,7 @@ import {
   buildBedEvent,
 } from '../services/calendar';
 import { formatTime, formatDate, formatDateTime } from '../utils/timeUtils';
-import { yahooTransitUrl, ORIGIN_STATION } from '../services/transitLinks';
+import { yahooTransitUrl } from '../services/transitLinks';
 
 export default function ProjectResult({ result, onReset }) {
   const { googleToken, reauth } = useAuth();
@@ -19,7 +19,7 @@ export default function ProjectResult({ result, onReset }) {
   const [added, setAdded] = useState(false);
   const [calError, setCalError] = useState('');
 
-  const { form, collectionTime, schedule } = result;
+  const { form, collectionTime, schedule, stationInfo } = result;
 
   const getToken = async () => {
     if (googleToken) return googleToken;
@@ -124,7 +124,7 @@ export default function ProjectResult({ result, onReset }) {
           <div className="tl-item tl-board">
             <div className="tl-time">{formatTime(schedule.boardingTime)}</div>
             <div className="tl-dot" />
-            <div className="tl-label">🚃 {ORIGIN_STATION}駅 乗車</div>
+            <div className="tl-label">🚃 {form.station || stationInfo?.name}駅 乗車</div>
           </div>
           <div className="tl-line tl-line-dashed" />
           <div className="tl-item tl-collect">
@@ -135,9 +135,9 @@ export default function ProjectResult({ result, onReset }) {
         </div>
 
         <div className="route-note">
-          出発駅: {ORIGIN_STATION}駅（自宅から徒歩5分）／{' '}
+          出発駅: {form.station || stationInfo?.name}駅（自宅から徒歩{stationInfo?.walkMin}分）／{' '}
           <a
-            href={yahooTransitUrl(form.location, form.date, form.time)}
+            href={yahooTransitUrl(form.station || stationInfo?.name, form.location, form.date, form.time)}
             target="_blank"
             rel="noopener noreferrer"
           >
