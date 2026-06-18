@@ -648,4 +648,19 @@ input:focus, select:focus {
   border-color: var(--gray-300);
   cursor: not-allowed;
 }
+.transit-link-auto {
+  background: var(--success-light);
+  color: var(--success);
+  border-color: var(--success);
+  cursor: pointer;
+  border: 1px solid;
+  font-family: inherit;
+}
+.transit-link-auto:hover:not(:disabled) { background: #dcfce7; }
+.transit-link-auto:disabled {
+  color: var(--gray-500);
+  background: var(--gray-100);
+  border-color: var(--gray-300);
+  cursor: not-allowed;
+}
 .route-note a { color: var(--primary); }

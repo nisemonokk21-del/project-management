@@ -1,20 +1,36 @@
 import { useState } from 'react';
 import { combineDateAndTime, buildSchedule, jstDateString } from '../utils/timeUtils';
 import { yahooTransitUrl, googleMapsTransitUrl, ORIGIN_STATION } from '../services/transitLinks';
+import { fetchDepartureTime } from '../services/googleDirections';
 
 export default function ProjectForm({ onResult }) {
   const [form, setForm] = useState({
     name: '',
     type: 'オーディション',
-    date: jstDateString(1), // デフォルトは明日
+    date: jstDateString(1),
     time: '10:00',
     location: '',
     boardingTime: '',
   });
   const [error, setError] = useState('');
+  const [autoFilling, setAutoFilling] = useState(false);
+  const [autoError, setAutoError] = useState('');
 
   const handleChange = (e) => {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  };
+
+  const handleAutoFill = async () => {
+    setAutoFilling(true);
+    setAutoError('');
+    try {
+      const depTime = await fetchDepartureTime(form.location, form.date, form.time);
+      setForm((prev) => ({ ...prev, boardingTime: depTime }));
+    } catch (e) {
+      setAutoError(e.message);
+    } finally {
+      setAutoFilling(false);
+    }
   };
 
   const handleSubmit = (e) => {
@@ -34,6 +50,7 @@ export default function ProjectForm({ onResult }) {
   };
 
   const canSearchRoute = form.location.trim() !== '';
+  const canAutoFill = canSearchRoute && form.date && form.time;
 
   return (
     <div className="card">
@@ -112,6 +129,14 @@ export default function ProjectForm({ onResult }) {
         <div className="form-group transit-section">
           <label htmlFor="boardingTime">乗車時刻（{ORIGIN_STATION}駅 発）</label>
           <div className="transit-links">
+            <button
+              type="button"
+              className="transit-link transit-link-auto"
+              disabled={!canAutoFill || autoFilling}
+              onClick={handleAutoFill}
+            >
+              {autoFilling ? <><span className="spinner" /> 検索中…</> : '✨ 自動で取得'}
+            </button>
             <a
               href={canSearchRoute ? yahooTransitUrl(form.location, form.date, form.time) : undefined}
               target="_blank"
@@ -120,7 +145,7 @@ export default function ProjectForm({ onResult }) {
               aria-disabled={!canSearchRoute}
               onClick={(e) => { if (!canSearchRoute) e.preventDefault(); }}
             >
-              🔍 Yahoo!乗換案内で調べる
+              🔍 Yahoo!乗換
             </a>
             <a
               href={canSearchRoute ? googleMapsTransitUrl(form.location) : undefined}
@@ -130,9 +155,10 @@ export default function ProjectForm({ onResult }) {
               aria-disabled={!canSearchRoute}
               onClick={(e) => { if (!canSearchRoute) e.preventDefault(); }}
             >
-              🗺️ Googleマップで調べる
+              🗺️ Googleマップ
             </a>
           </div>
+          {autoError && <div className="error">⚠️ {autoError}</div>}
           <input
             id="boardingTime"
             type="time"
@@ -142,8 +168,7 @@ export default function ProjectForm({ onResult }) {
             required
           />
           <span className="hint">
-            上のリンクで集合時刻に間に合う電車を確認して、乗る電車の出発時刻を入力
-            （余裕を持つなら1〜2本前がおすすめ）
+            自動取得した時刻を確認して、必要なら手動で調整してください
           </span>
         </div>
 
