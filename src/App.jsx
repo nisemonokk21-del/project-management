@@ -32,7 +32,7 @@ export default function App() {
         )}
         {activeTab === 'expenses' && <ExpenseManager />}
       </main>
-      <footer className="version-footer">v2.0 — 乗車時刻入力方式</footer>
+      <footer className="version-footer">v2.1 — 乗車時刻自動取得</footer>
     </div>
   );
 }
