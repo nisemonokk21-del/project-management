@@ -664,3 +664,115 @@ input:focus, select:focus {
   cursor: not-allowed;
 }
 .route-note a { color: var(--primary); }
+
+/* ===== LINE返信自動生成 (LineScheduler) ===== */
+.line-scheduler { display: flex; flex-direction: column; }
+
+.line-textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1.5px solid var(--gray-300);
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  line-height: 1.7;
+  resize: vertical;
+  min-height: 140px;
+  color: var(--gray-900);
+  background: #fff;
+  transition: border-color .15s;
+}
+
+.line-textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(37,99,235,.1);
+}
+
+.line-textarea::placeholder { color: var(--gray-300); }
+.line-textarea:disabled { background: var(--gray-50); }
+
+.ls-btn-row { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+
+.ls-meta { display: flex; flex-direction: column; gap: 10px; }
+.ls-meta > div { display: flex; align-items: baseline; gap: 10px; font-size: 14px; }
+.ls-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--gray-500);
+  min-width: 52px;
+  flex-shrink: 0;
+}
+
+.ls-date-list { display: flex; flex-direction: column; gap: 10px; }
+
+.ls-date-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid;
+  flex-wrap: wrap;
+}
+
+.ls-ok { background: var(--success-light); border-color: #86efac; }
+.ls-ng { background: var(--danger-light); border-color: #fecaca; }
+
+.ls-date-label { display: flex; align-items: center; gap: 8px; }
+.ls-date-text { font-weight: 700; font-size: 16px; font-variant-numeric: tabular-nums; }
+.ls-candidate-label {
+  font-size: 11px;
+  color: var(--gray-500);
+  background: rgba(255,255,255,.7);
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
+.ls-date-status { font-size: 14px; font-weight: 600; }
+.ls-status-ok { color: var(--success); }
+.ls-status-ng { color: var(--danger); }
+
+.ls-reply-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.ls-reply-text {
+  background: var(--gray-50);
+  border: 1px solid var(--gray-200);
+  border-radius: 8px;
+  padding: 16px 18px;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.9;
+  white-space: pre-wrap;
+  color: var(--gray-900);
+  margin: 0;
+}
+
+.ls-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--primary-light);
+  color: var(--primary);
+  border: 1px solid var(--primary);
+  border-radius: 8px;
+  padding: 7px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background .15s, color .15s, border-color .15s;
+}
+
+.ls-copy-btn:hover { background: #dbeafe; }
+.ls-copy-btn.ls-copied {
+  background: var(--success-light);
+  color: var(--success);
+  border-color: var(--success);
+}

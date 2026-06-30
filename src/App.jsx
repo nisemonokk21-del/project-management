@@ -5,6 +5,7 @@ import Login from './components/Login';
 import ProjectForm from './components/ProjectForm';
 import ProjectResult from './components/ProjectResult';
 import ExpenseManager from './components/ExpenseManager';
+import LineScheduler from './components/LineScheduler';
 import './App.css';
 
 export default function App() {
@@ -31,8 +32,9 @@ export default function App() {
           )
         )}
         {activeTab === 'expenses' && <ExpenseManager />}
+        {activeTab === 'line' && <LineScheduler />}
       </main>
-      <footer className="version-footer">v2.1 — 乗車時刻自動取得</footer>
+      <footer className="version-footer">v3.0 — LINE返信自動生成</footer>
     </div>
   );
 }
