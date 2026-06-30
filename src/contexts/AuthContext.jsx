@@ -2,8 +2,6 @@ import { createContext, useContext, useState, useEffect } from 'react';
 import { auth } from '../services/firebase';
 import {
   signInWithPopup,
-  signInWithRedirect,
-  getRedirectResult,
   signOut,
   onAuthStateChanged,
   GoogleAuthProvider,
@@ -11,28 +9,12 @@ import {
 
 const AuthContext = createContext(null);
 
-const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-
-function makeProvider() {
-  const provider = new GoogleAuthProvider();
-  provider.addScope('https://www.googleapis.com/auth/calendar');
-  return provider;
-}
-
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [googleToken, setGoogleToken] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // リダイレクトログイン後のトークン取得
-    getRedirectResult(auth).then((result) => {
-      if (result) {
-        const credential = GoogleAuthProvider.credentialFromResult(result);
-        if (credential?.accessToken) setGoogleToken(credential.accessToken);
-      }
-    }).catch(() => {});
-
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
       setLoading(false);
@@ -41,14 +23,11 @@ export function AuthProvider({ children }) {
   }, []);
 
   const login = async () => {
-    const provider = makeProvider();
-    if (isMobile) {
-      await signInWithRedirect(auth, provider);
-    } else {
-      const result = await signInWithPopup(auth, provider);
-      const credential = GoogleAuthProvider.credentialFromResult(result);
-      if (credential?.accessToken) setGoogleToken(credential.accessToken);
-    }
+    const provider = new GoogleAuthProvider();
+    provider.addScope('https://www.googleapis.com/auth/calendar');
+    const result = await signInWithPopup(auth, provider);
+    const credential = GoogleAuthProvider.credentialFromResult(result);
+    if (credential?.accessToken) setGoogleToken(credential.accessToken);
   };
 
   const logout = async () => {
@@ -57,11 +36,8 @@ export function AuthProvider({ children }) {
   };
 
   const reauth = async () => {
-    const provider = makeProvider();
-    if (isMobile) {
-      await signInWithRedirect(auth, provider);
-      return null;
-    }
+    const provider = new GoogleAuthProvider();
+    provider.addScope('https://www.googleapis.com/auth/calendar');
     const result = await signInWithPopup(auth, provider);
     const credential = GoogleAuthProvider.credentialFromResult(result);
     const token = credential?.accessToken || null;
