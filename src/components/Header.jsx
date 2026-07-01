@@ -20,6 +20,12 @@ export default function Header({ activeTab, setActiveTab }) {
           >
             経費管理
           </button>
+          <button
+            className={`nav-btn${activeTab === 'line' ? ' active' : ''}`}
+            onClick={() => setActiveTab('line')}
+          >
+            LINE返信
+          </button>
         </nav>
         {user && (
           <div className="user-area">
