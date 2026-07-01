@@ -68,3 +68,42 @@ export function buildBedEvent(name, bedTime, wakeUpTime) {
     colorId: '3',
   };
 }
+
+export async function listCalendars(token) {
+  return apiFetch(`${BASE}/users/me/calendarList`, token);
+}
+
+// dateStr: "YYYY-MM-DD" in JST
+export async function getEventsFromCalendar(token, calendarId, dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  // JST midnight = UTC−9h; 23:59:59 JST = UTC+14:59:59
+  const start = new Date(Date.UTC(y, m - 1, d, -9, 0, 0, 0));
+  const end = new Date(Date.UTC(y, m - 1, d, 14, 59, 59, 999));
+
+  const url = new URL(`${BASE}/calendars/${encodeURIComponent(calendarId)}/events`);
+  url.searchParams.set('timeMin', start.toISOString());
+  url.searchParams.set('timeMax', end.toISOString());
+  url.searchParams.set('singleEvents', 'true');
+  url.searchParams.set('orderBy', 'startTime');
+  url.searchParams.set('timeZone', 'Asia/Tokyo');
+
+  return apiFetch(url.toString(), token);
+}
+
+export async function createEventInCalendar(token, calendarId, event) {
+  return apiFetch(
+    `${BASE}/calendars/${encodeURIComponent(calendarId)}/events`,
+    token,
+    { method: 'POST', body: JSON.stringify(event) }
+  );
+}
+
+// dateStr: "YYYY-MM-DD"
+export function buildProvisionalShootingEvent(clientName, dateStr) {
+  return {
+    summary: `【仮撮影】${clientName}`,
+    start: { date: dateStr },
+    end: { date: dateStr },
+    colorId: '6', // tangerine
+  };
+}
