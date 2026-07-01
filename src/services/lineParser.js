@@ -17,5 +17,19 @@ export async function parseLineMessage(text) {
     throw new Error(err.error ?? `LINE解析に失敗しました (${res.status})`);
   }
 
-  return res.json();
+  const data = await res.json();
+
+  // Worker のバージョンによって dates が「文字列の配列」で返ってくる場合と
+  // 「{date, label} の配列」で返ってくる場合があるため、どちらでも動くように
+  // {date, label} 形式へ正規化し、日付として不正なものは除外する。
+  const rawDates = Array.isArray(data.dates) ? data.dates : [];
+  const dates = rawDates
+    .map((d) =>
+      typeof d === 'string'
+        ? { date: d, label: '' }
+        : { date: d?.date, label: d?.label ?? '' }
+    )
+    .filter((d) => typeof d.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d.date));
+
+  return { ...data, dates };
 }
