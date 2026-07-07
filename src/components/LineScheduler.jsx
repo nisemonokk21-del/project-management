@@ -76,11 +76,14 @@ export default function LineScheduler() {
   const [statusMsg, setStatusMsg] = useState('');
   const [parsed, setParsed] = useState(null);
   const [dateResults, setDateResults] = useState([]);
-  const [provisionalCalFound, setProvisionalCalFound] = useState(true);
+  const [provisionalCal, setProvisionalCal] = useState(null);
   const [replyText, setReplyText] = useState('');
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
+  const [registering, setRegistering] = useState(false);
+  const [registered, setRegistered] = useState(false);
+  const [registerError, setRegisterError] = useState('');
 
   const getToken = async () => {
     if (googleToken) return googleToken;
@@ -97,7 +100,10 @@ export default function LineScheduler() {
     setReplyText('');
     setCopied(false);
     setDone(false);
-    setProvisionalCalFound(true);
+    setProvisionalCal(null);
+    setRegistering(false);
+    setRegistered(false);
+    setRegisterError('');
 
     try {
       // Step 1: Parse LINE text via Cloud Function → Claude API
@@ -119,7 +125,7 @@ export default function LineScheduler() {
 
       const conflictCals = allCals.filter((cal) => CONFLICT_CALENDAR_NAMES.has(cal.summary));
       const provisionalCal = allCals.find((cal) => cal.summary === PROVISIONAL_CALENDAR_NAME);
-      setProvisionalCalFound(!!provisionalCal);
+      setProvisionalCal(provisionalCal ?? null);
 
       // Step 3: Check each candidate date for conflicts (parallel)
       setStatusMsg(`${parsedData.dates.length}件の候補日を確認中...`);
@@ -141,24 +147,7 @@ export default function LineScheduler() {
         })
       );
 
-      // Step 4: Register OK dates to 仮撮影 calendar (parallel)
-      const okCount = results.filter((r) => r.status === 'ok').length;
-      if (provisionalCal && okCount > 0) {
-        setStatusMsg(`仮撮影カレンダーに${okCount}件登録中...`);
-        await Promise.all(
-          results
-            .filter((r) => r.status === 'ok')
-            .map((r) =>
-              createEventInCalendar(
-                token,
-                provisionalCal.id,
-                buildProvisionalShootingEvent(parsedData.clientName || '案件', r.date)
-              ).catch((err) => console.error('カレンダー登録失敗:', r.date, err))
-            )
-        );
-      }
-
-      // Step 5: Generate reply text
+      // Step 4: Generate reply text (calendar registration now happens on manual confirmation)
       setDateResults(results);
       setReplyText(generateReply(results));
       setDone(true);
@@ -167,6 +156,32 @@ export default function LineScheduler() {
     } finally {
       setLoading(false);
       setStatusMsg('');
+    }
+  };
+
+  const handleRegister = async () => {
+    if (!provisionalCal) return;
+    setRegistering(true);
+    setRegisterError('');
+    try {
+      const token = await getToken();
+      if (!token) throw new Error('Googleログインが必要です。一度ログアウトして再ログインしてください。');
+
+      const okDates = dateResults.filter((r) => r.status === 'ok');
+      await Promise.all(
+        okDates.map((r) =>
+          createEventInCalendar(
+            token,
+            provisionalCal.id,
+            buildProvisionalShootingEvent(parsed?.clientName || '案件', r.date)
+          )
+        )
+      );
+      setRegistered(true);
+    } catch (err) {
+      setRegisterError(err.message ?? '登録に失敗しました');
+    } finally {
+      setRegistering(false);
     }
   };
 
@@ -187,10 +202,16 @@ export default function LineScheduler() {
     setError('');
     setParsed(null);
     setDateResults([]);
+    setProvisionalCal(null);
     setReplyText('');
     setCopied(false);
     setDone(false);
+    setRegistering(false);
+    setRegistered(false);
+    setRegisterError('');
   };
+
+  const okCount = dateResults.filter((r) => r.status === 'ok').length;
 
   return (
     <div className="line-scheduler">
@@ -267,9 +288,9 @@ export default function LineScheduler() {
           {/* Date check results */}
           <div className="card">
             <h3>📅 候補日チェック結果</h3>
-            {!provisionalCalFound && (
+            {!provisionalCal && (
               <div className="warn-text" style={{ marginBottom: '14px' }}>
-                ⚠️ 「仮撮影」カレンダーが見つからなかったためカレンダー登録をスキップしました
+                ⚠️ 「仮撮影」カレンダーが見つからなかったためカレンダー登録できません
               </div>
             )}
             <div className="ls-date-list">
@@ -287,7 +308,7 @@ export default function LineScheduler() {
                   <div className="ls-date-status">
                     {r.status === 'ok' ? (
                       <span className="ls-status-ok">
-                        ✅ OK{provisionalCalFound ? '  → 仮撮影登録済み' : ''}
+                        ✅ OK{registered ? '  → 仮撮影登録済み' : ''}
                       </span>
                     ) : (
                       <span className="ls-status-ng">
@@ -302,6 +323,27 @@ export default function LineScheduler() {
                 </div>
               ))}
             </div>
+
+            {okCount > 0 && provisionalCal && (
+              <div className="ls-register-row" style={{ marginTop: '14px' }}>
+                {registerError && <div className="error" style={{ marginBottom: '10px' }}>⚠️ {registerError}</div>}
+                {registered ? (
+                  <div className="ok-text">✅ 仮撮影カレンダーに{okCount}件登録しました</div>
+                ) : (
+                  <button
+                    className="btn-primary"
+                    onClick={handleRegister}
+                    disabled={registering}
+                  >
+                    {registering ? (
+                      <><span className="spinner" /> 登録中...</>
+                    ) : (
+                      `📅 仮撮影カレンダーに登録する（${okCount}件）`
+                    )}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Reply text */}
