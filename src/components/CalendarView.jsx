@@ -253,36 +253,51 @@ export default function CalendarView() {
             <div
               key={wi}
               className="calw-week"
-              style={{ minHeight: `${Math.max(76, 30 + laneCount * 21)}px` }}
+              style={{ minHeight: `${Math.max(74, 28 + laneCount * 21)}px` }}
             >
-              <div className="calw-daybg">
-                {weekDays.map((day, i) => {
-                  const dayNum = Number(day.slice(8));
+              {/* クリック判定用の透明レイヤー（背景色もここで表現） */}
+              <div className="calw-hitrow">
+                {weekDays.map((day) => {
                   const inMonth = day.startsWith(monthPrefix);
                   return (
                     <button
                       key={day}
                       className={
-                        'calw-daycell' +
+                        'calw-hit' +
                         (inMonth ? '' : ' calw-other') +
                         (day === selectedDay ? ' calw-selected' : '')
                       }
                       onClick={() => setSelectedDay(day)}
-                    >
+                      aria-label={day}
+                    />
+                  );
+                })}
+              </div>
+
+              {/* 日付の数字（バーと重ならないよう通常フローで最上段） */}
+              <div className="calw-numrow">
+                {weekDays.map((day, i) => {
+                  const dayNum = Number(day.slice(8));
+                  const inMonth = day.startsWith(monthPrefix);
+                  return (
+                    <div key={day} className="calw-numcell">
                       <span
                         className={
                           'calw-num' +
                           (day === todayStr ? ' calw-today' : '') +
+                          (!inMonth ? ' calw-other-num' : '') +
                           (i === 0 ? ' calw-sun' : '') +
                           (i === 6 ? ' calw-sat' : '')
                         }
                       >
                         {dayNum}
                       </span>
-                    </button>
+                    </div>
                   );
                 })}
               </div>
+
+              {/* イベントバー */}
               <div className="calw-bars">
                 {segs.map((s, k) => (
                   <div

@@ -16,25 +16,30 @@ export default function App() {
 
   if (!user) return <Login />;
 
-  const handleTabChange = (tab) => {
-    setActiveTab(tab);
-    setResult(null);
-  };
+  // 各タブは常にマウントしたまま display で切り替える。
+  // これでタブを移動しても入力内容や結果が保持され、戻れば元のまま。
+  const show = (tab) => ({ display: activeTab === tab ? undefined : 'none' });
 
   return (
     <div className="app">
-      <Header activeTab={activeTab} setActiveTab={handleTabChange} />
+      <Header activeTab={activeTab} setActiveTab={setActiveTab} />
       <main className="main">
-        {activeTab === 'project' && (
-          result ? (
+        <div style={show('project')}>
+          {result ? (
             <ProjectResult result={result} onReset={() => setResult(null)} />
           ) : (
             <ProjectForm onResult={setResult} />
-          )
-        )}
-        {activeTab === 'expenses' && <ExpenseManager />}
-        {activeTab === 'calendar' && <CalendarView />}
-        {activeTab === 'line' && <LineScheduler />}
+          )}
+        </div>
+        <div style={show('expenses')}>
+          <ExpenseManager />
+        </div>
+        <div style={show('calendar')}>
+          <CalendarView />
+        </div>
+        <div style={show('line')}>
+          <LineScheduler />
+        </div>
       </main>
       <footer className="version-footer">v3.0 — LINE返信自動生成</footer>
     </div>

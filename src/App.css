@@ -15,6 +15,7 @@
   --gray-100: #f1f5f9;
   --gray-200: #e2e8f0;
   --gray-300: #cbd5e1;
+  --gray-400: #94a3b8;
   --gray-500: #64748b;
   --gray-600: #475569;
   --gray-700: #334155;
@@ -886,58 +887,69 @@ input:focus, select:focus {
 .calw-weekday.calw-sun { color: var(--danger); }
 .calw-weekday.calw-sat { color: var(--primary); }
 
-/* 1週間 = 背景の日セル + 重ねるイベントバー */
+/* 1週間 = クリック層（背景） + 数字行 + バー行（縦積みで重ならない） */
 .calw-week {
   position: relative;
   border-bottom: 1px solid var(--gray-100);
 }
 
-.calw-daybg {
+/* 背景クリック層 */
+.calw-hitrow {
   position: absolute;
   inset: 0;
   display: grid;
   grid-template-columns: repeat(7, 1fr);
+  z-index: 0;
 }
 
-.calw-daycell {
+.calw-hit {
   background: none;
   border: none;
   border-left: 1px solid var(--gray-100);
-  padding: 3px 0 0;
   cursor: pointer;
-  font-family: inherit;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
   transition: background .15s;
 }
-.calw-daycell:first-child { border-left: none; }
-.calw-daycell:hover { background: var(--gray-50); }
-.calw-daycell.calw-other { background: var(--gray-50); }
-.calw-daycell.calw-other .calw-num { color: var(--gray-300); }
-.calw-daycell.calw-selected { background: var(--primary-light); }
+.calw-hit:first-child { border-left: none; }
+.calw-hit:hover { background: var(--gray-50); }
+.calw-hit.calw-other { background: var(--gray-50); }
+.calw-hit.calw-selected { background: var(--primary-light); }
+
+/* 数字行（最上段・クリックは下層に通す） */
+.calw-numrow {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  padding-top: 5px;
+  pointer-events: none;
+}
+.calw-numcell { display: flex; justify-content: center; }
 
 .calw-num {
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--gray-700);
   font-variant-numeric: tabular-nums;
   line-height: 1;
-  padding: 4px 5px;
-  border-radius: 6px;
+  padding: 3px 4px;
+  border-radius: 999px;
+  min-width: 20px;
+  text-align: center;
 }
 .calw-num.calw-sun { color: var(--danger); }
 .calw-num.calw-sat { color: var(--primary); }
+.calw-num.calw-other-num { color: var(--gray-400); }
 .calw-num.calw-today { background: var(--gray-900); color: #fff !important; }
 
 /* イベントバー（レーン配置） */
 .calw-bars {
   position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   grid-auto-rows: 19px;
   row-gap: 2px;
-  margin: 26px 1px 4px;
+  margin: 3px 1px 4px;
   pointer-events: none;
 }
 
