@@ -222,6 +222,15 @@ export default function CalendarView() {
             {year}年{month + 1}月
           </div>
           <button className="cal-nav-btn" onClick={goNext} aria-label="次の月">›</button>
+          <button
+            className="cal-reload-btn"
+            onClick={load}
+            disabled={loading}
+            aria-label="再読み込み"
+            title="スケジュールを再読み込み"
+          >
+            <span className={loading ? 'cal-reload-spin' : ''}>🔄</span>
+          </button>
           <button className="cal-today-btn" onClick={goToday}>今日</button>
         </div>
 

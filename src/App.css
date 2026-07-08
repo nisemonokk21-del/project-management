@@ -834,8 +834,24 @@ input:focus, select:focus {
   text-align: center;
 }
 
-.cal-today-btn {
+.cal-reload-btn {
   margin-left: auto;
+  background: none;
+  border: 1px solid var(--gray-300);
+  border-radius: 8px;
+  width: 34px;
+  height: 34px;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background .15s;
+}
+.cal-reload-btn:hover:not(:disabled) { background: var(--gray-100); }
+.cal-reload-btn:disabled { cursor: default; }
+.cal-reload-btn span { display: inline-block; }
+.cal-reload-spin { animation: spin .8s linear infinite; }
+
+.cal-today-btn {
   background: var(--primary-light);
   color: var(--primary);
   border: 1px solid var(--primary);
