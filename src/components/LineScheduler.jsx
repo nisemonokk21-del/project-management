@@ -27,32 +27,50 @@ const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
 function formatDateJP(dateStr) {
   const [y, m, d] = dateStr.split('-').map(Number);
   const day = WEEKDAYS[new Date(y, m - 1, d).getDay()];
-  return `${m}/${d}(${day})`;
+  const thisYear = new Date().getFullYear();
+  // 年が今年でない場合は年も表示する（年の解釈ミスに気付けるように）
+  return y === thisYear ? `${m}/${d}(${day})` : `${y}/${m}/${d}(${day})`;
 }
 
+// 被りイベントの表示用（時刻付きなら時刻を添える）
+function formatConflict(e) {
+  const title = e.summary || '(無題)';
+  if (e.start?.dateTime) {
+    const t = new Date(e.start.dateTime).toLocaleTimeString('ja-JP', {
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'Asia/Tokyo',
+    });
+    return `${t} ${title}`;
+  }
+  return title;
+}
+
+// include（ユーザーの最終判断）を反映して返信文を組み立てる
 function generateReply(dateResults) {
+  const items = dateResults.map((r) => ({ ...r, status: r.include ? 'ok' : 'ng' }));
   const lines = [];
   let i = 0;
 
-  while (i < dateResults.length) {
-    const curr = dateResults[i];
+  while (i < items.length) {
+    const curr = items[i];
     const isOk = curr.status === 'ok';
-    const conflictName = isOk ? null : (curr.conflicts[0]?.summary ?? '他の案件');
+    const conflictName = isOk ? null : (curr.conflicts[0]?.summary ?? 'NG');
 
-    // Find consecutive dates with same status (and same conflict name for NG)
+    // 同じ状態（NGなら同じ被り先）が連続する日をまとめる
     let j = i + 1;
-    while (j < dateResults.length) {
-      const next = dateResults[j];
+    while (j < items.length) {
+      const next = items[j];
       if (next.status !== curr.status) break;
-      if (!isOk && (next.conflicts[0]?.summary ?? '他の案件') !== conflictName) break;
-      const prev = new Date(dateResults[j - 1].date + 'T00:00:00');
+      if (!isOk && (next.conflicts[0]?.summary ?? 'NG') !== conflictName) break;
+      const prev = new Date(items[j - 1].date + 'T00:00:00');
       const cur = new Date(next.date + 'T00:00:00');
       if ((cur - prev) / 86400000 !== 1) break;
       j++;
     }
 
-    const group = dateResults.slice(i, j);
-    // Format: "7/16,17" or "7/31,8/1"
+    const group = items.slice(i, j);
+    // 表記: "7/16,17" や "7/31,8/1"
     const dateLabel = group
       .map((r, idx) => {
         const [, m, d] = r.date.split('-').map(Number);
@@ -85,12 +103,14 @@ export default function LineScheduler() {
   const [parsed, setParsed] = useState(null);
   const [dateResults, setDateResults] = useState([]);
   const [provisionalCal, setProvisionalCal] = useState(null);
+  const [calDiag, setCalDiag] = useState({ checked: 0, failed: 0 });
   const [replyText, setReplyText] = useState('');
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
   const [registering, setRegistering] = useState(false);
   const [registered, setRegistered] = useState(false);
+  const [registeredCount, setRegisteredCount] = useState(0);
   const [registerError, setRegisterError] = useState('');
 
   const getToken = async () => {
@@ -109,12 +129,14 @@ export default function LineScheduler() {
     setCopied(false);
     setDone(false);
     setProvisionalCal(null);
+    setCalDiag({ checked: 0, failed: 0 });
     setRegistering(false);
     setRegistered(false);
+    setRegisteredCount(0);
     setRegisterError('');
 
     try {
-      // Step 1: Parse LINE text via Cloud Function → Claude API
+      // Step 1: LINE文を解析（Cloudflare Worker → Claude API）
       setStatusMsg('LINE文を解析中...');
       const parsedData = await parseLineMessage(lineText.trim());
       setParsed(parsedData);
@@ -123,7 +145,7 @@ export default function LineScheduler() {
         throw new Error('候補日が見つかりませんでした。LINE文に日付が含まれているか確認してください。');
       }
 
-      // Step 2: Load user's calendar list
+      // Step 2: カレンダー一覧を読み込み
       setStatusMsg('カレンダーを読み込み中...');
       const token = await getToken();
       if (!token) throw new Error('Googleログインが必要です。一度ログアウトして再ログインしてください。');
@@ -132,30 +154,39 @@ export default function LineScheduler() {
       const allCals = calListData.items || [];
 
       const conflictCals = allCals.filter(isConflictCalendar);
-      const provisionalCal = allCals.find((cal) => cal.summary === PROVISIONAL_CALENDAR_NAME);
-      setProvisionalCal(provisionalCal ?? null);
 
-      // Step 3: Check each candidate date for conflicts (parallel)
+      // 仮撮影カレンダーは「書き込み権限のあるもの」を優先して選ぶ
+      const provisionals = allCals.filter((c) => c.summary === PROVISIONAL_CALENDAR_NAME);
+      const writable = provisionals.find((c) => c.accessRole === 'owner' || c.accessRole === 'writer');
+      setProvisionalCal(writable ?? provisionals[0] ?? null);
+
+      // Step 3: 各候補日の被りを確認（並列）— 読み込み失敗は数えて表示する
       setStatusMsg(`${parsedData.dates.length}件の候補日を確認中...`);
+      const failedCalIds = new Set();
       const results = await Promise.all(
         parsedData.dates.map(async (dateInfo) => {
           const checks = await Promise.all(
             conflictCals.map((cal) =>
               getEventsFromCalendar(token, cal.id, dateInfo.date)
                 .then((data) => data.items || [])
-                .catch(() => [])
+                .catch(() => {
+                  failedCalIds.add(cal.id);
+                  return [];
+                })
             )
           );
           const conflicts = checks.flat().filter((e) => e.summary);
           return {
             ...dateInfo,
-            status: conflicts.length > 0 ? 'ng' : 'ok',
             conflicts,
+            // include = ユーザーの最終判断（初期値は自動判定、ボタンで切替可能）
+            include: conflicts.length === 0,
           };
         })
       );
+      setCalDiag({ checked: conflictCals.length, failed: failedCalIds.size });
 
-      // Step 4: Generate reply text (calendar registration now happens on manual confirmation)
+      // Step 4: 返信文の下書きを生成（カレンダー登録はユーザー確認後）
       setDateResults(results);
       setReplyText(generateReply(results));
       setDone(true);
@@ -167,17 +198,29 @@ export default function LineScheduler() {
     }
   };
 
+  // OK/NGの手動切替。返信文の下書きも作り直す
+  const toggleDate = (idx) => {
+    const next = dateResults.map((r, i) => (i === idx ? { ...r, include: !r.include } : r));
+    setDateResults(next);
+    setReplyText(generateReply(next));
+    setRegistered(false);
+    setRegisterError('');
+  };
+
+  const includedDates = dateResults.filter((r) => r.include);
+  const provisionalWritable =
+    provisionalCal && (provisionalCal.accessRole === 'owner' || provisionalCal.accessRole === 'writer');
+
   const handleRegister = async () => {
-    if (!provisionalCal) return;
+    if (!provisionalCal || includedDates.length === 0) return;
     setRegistering(true);
     setRegisterError('');
     try {
       const token = await getToken();
       if (!token) throw new Error('Googleログインが必要です。一度ログアウトして再ログインしてください。');
 
-      const okDates = dateResults.filter((r) => r.status === 'ok');
-      await Promise.all(
-        okDates.map((r) =>
+      const settled = await Promise.allSettled(
+        includedDates.map((r) =>
           createEventInCalendar(
             token,
             provisionalCal.id,
@@ -185,7 +228,26 @@ export default function LineScheduler() {
           )
         )
       );
-      setRegistered(true);
+      const fails = settled.filter((s) => s.status === 'rejected');
+      const okCount = settled.length - fails.length;
+
+      if (fails.length > 0) {
+        let msg = fails[0].reason?.message ?? '不明なエラー';
+        if (/writer access/i.test(msg)) {
+          msg =
+            '「仮撮影」カレンダーへの書き込み権限がありません。Googleカレンダーの共有設定で「予定の変更」権限を付けてもらってください。';
+        }
+        setRegisterError(
+          okCount > 0 ? `${okCount}件登録しましたが${fails.length}件失敗: ${msg}` : `登録に失敗しました: ${msg}`
+        );
+        if (okCount > 0) {
+          setRegistered(true);
+          setRegisteredCount(okCount);
+        }
+      } else {
+        setRegistered(true);
+        setRegisteredCount(okCount);
+      }
     } catch (err) {
       setRegisterError(err.message ?? '登録に失敗しました');
     } finally {
@@ -211,15 +273,15 @@ export default function LineScheduler() {
     setParsed(null);
     setDateResults([]);
     setProvisionalCal(null);
+    setCalDiag({ checked: 0, failed: 0 });
     setReplyText('');
     setCopied(false);
     setDone(false);
     setRegistering(false);
     setRegistered(false);
+    setRegisteredCount(0);
     setRegisterError('');
   };
-
-  const okCount = dateResults.filter((r) => r.status === 'ok').length;
 
   return (
     <div className="line-scheduler">
@@ -251,7 +313,7 @@ export default function LineScheduler() {
                 <span className="spinner" /> {statusMsg || '処理中...'}
               </>
             ) : (
-              '✨ 解析・被りチェック・返信生成'
+              '✨ 解析・被りチェック・下書き生成'
             )}
           </button>
           {done && (
@@ -296,68 +358,83 @@ export default function LineScheduler() {
           {/* Date check results */}
           <div className="card">
             <h3>📅 候補日チェック結果</h3>
-            {!provisionalCal && (
+            <p className="ls-diag">
+              ✔ {calDiag.checked}個のカレンダーで被りを確認
+              {calDiag.failed > 0 && (
+                <span className="ls-diag-warn">（⚠ {calDiag.failed}個は読み込めませんでした）</span>
+              )}
+            </p>
+            {calDiag.checked === 0 && (
               <div className="warn-text" style={{ marginBottom: '14px' }}>
-                ⚠️ 「仮撮影」カレンダーが見つからなかったためカレンダー登録できません
+                ⚠️ 被りを確認できるカレンダーが見つかりませんでした。全てOK判定になっている可能性があります。
               </div>
             )}
+            <p className="ls-hint">ボタンでOK/NGを切り替えられます（返信文の下書きも自動で更新されます）</p>
             <div className="ls-date-list">
               {dateResults.map((r, i) => (
                 <div
                   key={i}
-                  className={`ls-date-item ${r.status === 'ok' ? 'ls-ok' : 'ls-ng'}`}
+                  className={`ls-date-item ${r.include ? 'ls-ok' : 'ls-ng'}`}
                 >
-                  <div className="ls-date-label">
-                    <span className="ls-date-text">{formatDateJP(r.date)}</span>
-                    {r.label && (
-                      <span className="ls-candidate-label">{r.label}</span>
+                  <div className="ls-date-main">
+                    <div className="ls-date-label">
+                      <span className="ls-date-text">{formatDateJP(r.date)}</span>
+                      {r.label && (
+                        <span className="ls-candidate-label">{r.label}</span>
+                      )}
+                    </div>
+                    {r.conflicts.length > 0 && (
+                      <div className="ls-conflict-list">
+                        ⚠️ {r.conflicts.map(formatConflict).join(' / ')}
+                      </div>
                     )}
                   </div>
-                  <div className="ls-date-status">
-                    {r.status === 'ok' ? (
-                      <span className="ls-status-ok">
-                        ✅ OK{registered ? '  → 仮撮影登録済み' : ''}
-                      </span>
-                    ) : (
-                      <span className="ls-status-ng">
-                        ❌{' '}
-                        {r.conflicts
-                          .map((c) => c.summary)
-                          .filter(Boolean)
-                          .join(' / ') || '他の予定あり'}
-                      </span>
-                    )}
-                  </div>
+                  <button
+                    className={`ls-toggle-btn ${r.include ? 'ls-t-ok' : 'ls-t-ng'}`}
+                    onClick={() => toggleDate(i)}
+                  >
+                    {r.include ? '✅ OK' : '❌ NG'}
+                  </button>
                 </div>
               ))}
             </div>
 
-            {okCount > 0 && provisionalCal && (
-              <div className="ls-register-row" style={{ marginTop: '14px' }}>
-                {registerError && <div className="error" style={{ marginBottom: '10px' }}>⚠️ {registerError}</div>}
-                {registered ? (
-                  <div className="ok-text">✅ 仮撮影カレンダーに{okCount}件登録しました</div>
-                ) : (
-                  <button
-                    className="btn-primary"
-                    onClick={handleRegister}
-                    disabled={registering}
-                  >
-                    {registering ? (
-                      <><span className="spinner" /> 登録中...</>
-                    ) : (
-                      `📅 仮撮影カレンダーに登録する（${okCount}件）`
-                    )}
-                  </button>
-                )}
-              </div>
-            )}
+            <div className="ls-register-row" style={{ marginTop: '14px' }}>
+              {!provisionalCal && (
+                <div className="warn-text" style={{ marginBottom: '10px' }}>
+                  ⚠️ 「仮撮影」カレンダーが見つからないため登録できません
+                </div>
+              )}
+              {provisionalCal && !provisionalWritable && (
+                <div className="warn-text" style={{ marginBottom: '10px' }}>
+                  ⚠️ 「仮撮影」カレンダーへの書き込み権限がありません。
+                  Googleカレンダーの共有設定で「予定の変更」権限を付けてもらうか、
+                  自分で「仮撮影」という名前のカレンダーを新しく作ってください。
+                </div>
+              )}
+              {registerError && <div className="error" style={{ marginBottom: '10px' }}>⚠️ {registerError}</div>}
+              {registered ? (
+                <div className="ok-text">✅ 仮撮影カレンダーに{registeredCount}件登録しました</div>
+              ) : (
+                <button
+                  className="btn-primary"
+                  onClick={handleRegister}
+                  disabled={registering || !provisionalWritable || includedDates.length === 0}
+                >
+                  {registering ? (
+                    <><span className="spinner" /> 登録中...</>
+                  ) : (
+                    `📅 OKの日を仮撮影カレンダーに登録（${includedDates.length}件）`
+                  )}
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Reply text */}
           <div className="card">
             <div className="ls-reply-header">
-              <h3 style={{ margin: 0 }}>💬 返信文</h3>
+              <h3 style={{ margin: 0 }}>💬 返信文（下書き）</h3>
               <button
                 className={`ls-copy-btn${copied ? ' ls-copied' : ''}`}
                 onClick={handleCopy}
@@ -365,7 +442,13 @@ export default function LineScheduler() {
                 {copied ? '✓ コピー済み' : '📋 コピー'}
               </button>
             </div>
-            <pre className="ls-reply-text">{replyText}</pre>
+            <p className="ls-hint">自由に編集できます。OK/NGを切り替えると下書きは作り直されます。</p>
+            <textarea
+              className="ls-reply-textarea"
+              value={replyText}
+              onChange={(e) => setReplyText(e.target.value)}
+              rows={10}
+            />
           </div>
         </>
       )}

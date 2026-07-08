@@ -113,6 +113,21 @@ JSON形式（コードブロックなし、マークダウンなし）で返答�
       (d) => d?.date && /^\d{4}-\d{2}-\d{2}$/.test(d.date)
     );
 
+    // 年の誤解釈対策: 候補日は必ず未来のはずなので、
+    // 過去の日付は今日以降になるまで年を進める
+    parsed.dates = parsed.dates
+      .map((d) => {
+        let s = d.date;
+        let guard = 0;
+        while (s < todayJST && guard < 3) {
+          const [y, m, day] = s.split('-').map(Number);
+          s = `${y + 1}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          guard++;
+        }
+        return { ...d, date: s };
+      })
+      .sort((a, b) => a.date.localeCompare(b.date));
+
     return new Response(JSON.stringify(parsed), { headers: jsonHeaders });
   },
 };
