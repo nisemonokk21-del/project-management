@@ -90,6 +90,18 @@ export async function getEventsFromCalendar(token, calendarId, dateStr) {
   return apiFetch(url.toString(), token);
 }
 
+// 任意の期間のイベントを取得する（月表示カレンダー用）
+export async function getEventsInRange(token, calendarId, timeMin, timeMax) {
+  const url = new URL(`${BASE}/calendars/${encodeURIComponent(calendarId)}/events`);
+  url.searchParams.set('timeMin', timeMin.toISOString());
+  url.searchParams.set('timeMax', timeMax.toISOString());
+  url.searchParams.set('singleEvents', 'true');
+  url.searchParams.set('orderBy', 'startTime');
+  url.searchParams.set('timeZone', 'Asia/Tokyo');
+  url.searchParams.set('maxResults', '2500');
+  return apiFetch(url.toString(), token);
+}
+
 export async function createEventInCalendar(token, calendarId, event) {
   return apiFetch(
     `${BASE}/calendars/${encodeURIComponent(calendarId)}/events`,

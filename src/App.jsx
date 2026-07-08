@@ -6,6 +6,7 @@ import ProjectForm from './components/ProjectForm';
 import ProjectResult from './components/ProjectResult';
 import ExpenseManager from './components/ExpenseManager';
 import LineScheduler from './components/LineScheduler';
+import CalendarView from './components/CalendarView';
 import './App.css';
 
 export default function App() {
@@ -32,6 +33,7 @@ export default function App() {
           )
         )}
         {activeTab === 'expenses' && <ExpenseManager />}
+        {activeTab === 'calendar' && <CalendarView />}
         {activeTab === 'line' && <LineScheduler />}
       </main>
       <footer className="version-footer">v3.0 — LINE返信自動生成</footer>

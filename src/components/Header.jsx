@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 const TABS = [
   { key: 'project', icon: '📋', label: '案件登録' },
   { key: 'expenses', icon: '💰', label: '経費管理' },
+  { key: 'calendar', icon: '📅', label: 'カレンダー' },
   { key: 'line', icon: '📩', label: 'LINE返信' },
 ];
 
