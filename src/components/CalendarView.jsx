@@ -9,29 +9,79 @@ function jstDay(date) {
   return date.toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
 }
 
-// "YYYY-MM-DD" のローカル整形
 function fmtLocal(y, m0, d) {
   return `${y}-${String(m0 + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 }
 
-// 終日イベント: start.date 〜 end.date(排他的) の各日を列挙
-function eachDay(startStr, endStrExclusive) {
-  const [sy, sm, sd] = startStr.split('-').map(Number);
-  let cur = Date.UTC(sy, sm - 1, sd);
-  let endT;
-  if (endStrExclusive) {
-    const [ey, em, ed] = endStrExclusive.split('-').map(Number);
-    endT = Date.UTC(ey, em - 1, ed);
-  } else {
-    endT = cur + 86400000;
-  }
-  const days = [];
-  while (cur < endT && days.length < 60) {
-    const dt = new Date(cur);
-    days.push(fmtLocal(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate()));
-    cur += 86400000;
-  }
-  return days;
+// "YYYY-MM-DD" に n 日足す
+function addDays(dayStr, n) {
+  const [y, m, d] = dayStr.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d + n));
+  return fmtLocal(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate());
+}
+
+// JST の 0:00 を表す UTC Date
+function jstMidnightUtc(dayStr) {
+  const [y, m, d] = dayStr.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d, -9, 0, 0));
+}
+
+// 月グリッドの開始日（日曜）と終了日（土曜）
+function gridRange(year, month) {
+  const first = fmtLocal(year, month, 1);
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const last = fmtLocal(year, month, daysInMonth);
+  const start = addDays(first, -new Date(year, month, 1).getDay());
+  const end = addDays(last, 6 - new Date(year, month, daysInMonth).getDay());
+  return { start, end };
+}
+
+// バーの背景色から読みやすい文字色を選ぶ
+function textColorFor(bg) {
+  const c = (bg || '#4285f4').replace('#', '');
+  if (c.length < 6) return '#fff';
+  const r = parseInt(c.slice(0, 2), 16);
+  const g = parseInt(c.slice(2, 4), 16);
+  const b = parseInt(c.slice(4, 6), 16);
+  return (r * 299 + g * 587 + b * 114) / 1000 > 165 ? '#1f2937' : '#fff';
+}
+
+// 1週間ぶんのイベントバー配置（レーン割り当て）
+function layoutWeek(weekDays, events) {
+  const weekStart = weekDays[0];
+  const weekEnd = weekDays[6];
+  const segs = [];
+  events.forEach((ev) => {
+    if (ev.startDay > weekEnd || ev.endDay < weekStart) return;
+    const col = weekDays.indexOf(ev.startDay >= weekStart ? ev.startDay : weekStart);
+    const endCol = weekDays.indexOf(ev.endDay <= weekEnd ? ev.endDay : weekEnd);
+    if (col === -1 || endCol === -1) return;
+    segs.push({
+      ...ev,
+      col,
+      span: endCol - col + 1,
+      contL: ev.startDay < weekStart,
+      contR: ev.endDay > weekEnd,
+    });
+  });
+  segs.sort(
+    (a, b) =>
+      a.col - b.col ||
+      b.span - a.span ||
+      (a.allDay !== b.allDay ? (a.allDay ? -1 : 1) : (a.time || '').localeCompare(b.time || ''))
+  );
+  const laneEnds = [];
+  segs.forEach((s) => {
+    let lane = laneEnds.findIndex((end) => end < s.col);
+    if (lane === -1) {
+      lane = laneEnds.length;
+      laneEnds.push(s.col + s.span - 1);
+    } else {
+      laneEnds[lane] = s.col + s.span - 1;
+    }
+    s.lane = lane;
+  });
+  return { segs, laneCount: laneEnds.length };
 }
 
 export default function CalendarView() {
@@ -39,7 +89,7 @@ export default function CalendarView() {
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth()); // 0-based
-  const [eventsByDay, setEventsByDay] = useState({});
+  const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [selectedDay, setSelectedDay] = useState(jstDay(now));
@@ -59,16 +109,17 @@ export default function CalendarView() {
         return;
       }
 
-      // 当月（JST）の範囲
-      const start = new Date(Date.UTC(year, month, 1, -9, 0, 0));
-      const end = new Date(Date.UTC(year, month + 1, 1, -9, 0, 0));
+      // グリッド全域（前後月の見えている日も含む）を取得
+      const { start, end } = gridRange(year, month);
+      const timeMin = jstMidnightUtc(start);
+      const timeMax = jstMidnightUtc(addDays(end, 1));
 
       const calListData = await listCalendars(token);
       const cals = (calListData.items || []).filter((c) => c.selected !== false);
 
       const results = await Promise.all(
         cals.map((cal) =>
-          getEventsInRange(token, cal.id, start, end)
+          getEventsInRange(token, cal.id, timeMin, timeMax)
             .then((d) =>
               (d.items || []).map((e) => ({ e, color: cal.backgroundColor || '#4285f4' }))
             )
@@ -76,18 +127,20 @@ export default function CalendarView() {
         )
       );
 
-      const map = {};
-      const push = (day, item) => {
-        (map[day] ||= []).push(item);
-      };
-
+      const list = [];
       results.flat().forEach(({ e, color }) => {
         const title = e.summary || '(無題)';
         if (e.start?.date) {
-          // 終日イベント
-          eachDay(e.start.date, e.end?.date).forEach((day) =>
-            push(day, { title, color, allDay: true, sortKey: '' })
-          );
+          // 終日イベント（end.date は排他的）
+          const startDay = e.start.date;
+          const endDay = e.end?.date ? addDays(e.end.date, -1) : startDay;
+          list.push({
+            title,
+            color,
+            startDay,
+            endDay: endDay >= startDay ? endDay : startDay,
+            allDay: true,
+          });
         } else if (e.start?.dateTime) {
           const dt = new Date(e.start.dateTime);
           const day = jstDay(dt);
@@ -96,16 +149,11 @@ export default function CalendarView() {
             minute: '2-digit',
             timeZone: 'Asia/Tokyo',
           });
-          push(day, { title, color, allDay: false, time, sortKey: time });
+          list.push({ title, color, startDay: day, endDay: day, allDay: false, time });
         }
       });
 
-      // 各日を時刻順に（終日→時刻イベント）
-      Object.values(map).forEach((arr) =>
-        arr.sort((a, b) => a.sortKey.localeCompare(b.sortKey))
-      );
-
-      setEventsByDay(map);
+      setEvents(list);
     } catch (err) {
       if (err.status === 401) {
         setError('カレンダートークンが期限切れです。再ログインしてください。');
@@ -149,20 +197,25 @@ export default function CalendarView() {
     setSelectedDay(jstDay(t));
   };
 
-  // グリッド生成（日曜始まり）
-  const firstWeekday = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const cells = [];
-  for (let i = 0; i < firstWeekday; i++) cells.push(null);
-  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
-  while (cells.length % 7 !== 0) cells.push(null);
+  // グリッド生成
+  const { start: gridStart, end: gridEnd } = gridRange(year, month);
+  const allDays = [];
+  for (let d = gridStart; d <= gridEnd; d = addDays(d, 1)) allDays.push(d);
+  const weeks = [];
+  for (let i = 0; i < allDays.length; i += 7) weeks.push(allDays.slice(i, i + 7));
 
+  const monthPrefix = `${year}-${String(month + 1).padStart(2, '0')}`;
   const todayStr = jstDay(new Date());
-  const selectedEvents = eventsByDay[selectedDay] || [];
+
+  const selectedEvents = events
+    .filter((ev) => ev.startDay <= selectedDay && selectedDay <= ev.endDay)
+    .sort((a, b) =>
+      a.allDay !== b.allDay ? (a.allDay ? -1 : 1) : (a.time || '').localeCompare(b.time || '')
+    );
 
   return (
     <div className="cal-wrap">
-      <div className="card">
+      <div className="card calw-card">
         <div className="cal-header">
           <button className="cal-nav-btn" onClick={goPrev} aria-label="前の月">‹</button>
           <div className="cal-title">
@@ -172,52 +225,79 @@ export default function CalendarView() {
           <button className="cal-today-btn" onClick={goToday}>今日</button>
         </div>
 
-        {error && <div className="error" style={{ marginBottom: '12px' }}>⚠️ {error}</div>}
+        {error && <div className="error" style={{ margin: '0 8px 12px' }}>⚠️ {error}</div>}
 
-        <div className="cal-grid cal-weekdays">
+        <div className="calw-weekdays">
           {WEEKDAYS.map((w, i) => (
             <div
               key={w}
-              className={`cal-weekday${i === 0 ? ' cal-sun' : ''}${i === 6 ? ' cal-sat' : ''}`}
+              className={`calw-weekday${i === 0 ? ' calw-sun' : ''}${i === 6 ? ' calw-sat' : ''}`}
             >
               {w}
             </div>
           ))}
         </div>
 
-        <div className="cal-grid">
-          {cells.map((d, i) => {
-            if (d === null) return <div key={i} className="cal-cell cal-empty" />;
-            const dayStr = fmtLocal(year, month, d);
-            const evs = eventsByDay[dayStr] || [];
-            const wd = i % 7;
-            return (
-              <button
-                key={i}
-                className={
-                  'cal-cell' +
-                  (dayStr === todayStr ? ' cal-today' : '') +
-                  (dayStr === selectedDay ? ' cal-selected' : '')
-                }
-                onClick={() => setSelectedDay(dayStr)}
-              >
-                <span
-                  className={`cal-day-num${wd === 0 ? ' cal-sun' : ''}${wd === 6 ? ' cal-sat' : ''}`}
-                >
-                  {d}
-                </span>
-                <span className="cal-dots">
-                  {evs.slice(0, 4).map((ev, k) => (
-                    <span key={k} className="cal-dot" style={{ background: ev.color }} />
-                  ))}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+        {weeks.map((weekDays, wi) => {
+          const { segs, laneCount } = layoutWeek(weekDays, events);
+          return (
+            <div
+              key={wi}
+              className="calw-week"
+              style={{ minHeight: `${Math.max(76, 30 + laneCount * 21)}px` }}
+            >
+              <div className="calw-daybg">
+                {weekDays.map((day, i) => {
+                  const dayNum = Number(day.slice(8));
+                  const inMonth = day.startsWith(monthPrefix);
+                  return (
+                    <button
+                      key={day}
+                      className={
+                        'calw-daycell' +
+                        (inMonth ? '' : ' calw-other') +
+                        (day === selectedDay ? ' calw-selected' : '')
+                      }
+                      onClick={() => setSelectedDay(day)}
+                    >
+                      <span
+                        className={
+                          'calw-num' +
+                          (day === todayStr ? ' calw-today' : '') +
+                          (i === 0 ? ' calw-sun' : '') +
+                          (i === 6 ? ' calw-sat' : '')
+                        }
+                      >
+                        {dayNum}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="calw-bars">
+                {segs.map((s, k) => (
+                  <div
+                    key={k}
+                    className={
+                      'calw-bar' + (s.contL ? ' calw-cont-l' : '') + (s.contR ? ' calw-cont-r' : '')
+                    }
+                    style={{
+                      gridColumn: `${s.col + 1} / span ${s.span}`,
+                      gridRow: s.lane + 1,
+                      background: s.color,
+                      color: textColorFor(s.color),
+                    }}
+                  >
+                    {s.title}
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
 
         {loading && (
-          <p className="loading-text" style={{ marginTop: '12px' }}>
+          <p className="loading-text" style={{ margin: '12px 8px 0' }}>
             <span className="spinner" /> 読み込み中...
           </p>
         )}

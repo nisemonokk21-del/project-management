@@ -6,6 +6,7 @@ on:
       - main
       - claude/actor-project-management-app-P1ljj
       - claude/continuation-nxpzcg
+      - claude/session-progress-tracking-yzn2w0
   workflow_dispatch:
 
 permissions:
