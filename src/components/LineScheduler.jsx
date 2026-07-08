@@ -8,11 +8,19 @@ import {
   buildProvisionalShootingEvent,
 } from '../services/calendar';
 
-// カレンダー被りチェック対象
-const CONFLICT_CALENDAR_NAMES = new Set([
-  'バラシ撮影', '演技', 'プライベート', '筋トレ', 'gmail kei', '仮撮影', '決定撮影',
-]);
+// 被りチェックから除外するカレンダー（誕生日・祝日など予定ではないもの）
+const EXCLUDE_FROM_CONFLICT = new Set(['誕生日', '祝日', 'Contacts', 'Birthdays']);
 const PROVISIONAL_CALENDAR_NAME = '仮撮影';
+
+// 被りチェック対象か（表示中で、除外リストに無いカレンダー）
+function isConflictCalendar(cal) {
+  if (cal.selected === false) return false;
+  const s = cal.summary || '';
+  if (EXCLUDE_FROM_CONFLICT.has(s)) return false;
+  // 日本の祝日などのGoogle提供カレンダーを除外
+  if (/holiday|祝日|contacts|birthday/i.test(cal.id || '')) return false;
+  return true;
+}
 
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
 
@@ -123,7 +131,7 @@ export default function LineScheduler() {
       const calListData = await listCalendars(token);
       const allCals = calListData.items || [];
 
-      const conflictCals = allCals.filter((cal) => CONFLICT_CALENDAR_NAMES.has(cal.summary));
+      const conflictCals = allCals.filter(isConflictCalendar);
       const provisionalCal = allCals.find((cal) => cal.summary === PROVISIONAL_CALENDAR_NAME);
       setProvisionalCal(provisionalCal ?? null);
 

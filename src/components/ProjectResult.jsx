@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import {
-  getEvents,
+  listCalendars,
+  getEventsInRange,
   createEvent,
   buildProjectEvent,
   buildWakeEvent,
@@ -32,8 +33,26 @@ export default function ProjectResult({ result, onReset }) {
     try {
       const token = await getToken();
       if (!token) { setCalError('再ログインが必要です'); return; }
-      const data = await getEvents(token, collectionTime);
-      const items = data.items || [];
+
+      // 当日 0:00〜23:59 の範囲を、表示中の全カレンダーから取得
+      const dayStart = new Date(collectionTime); dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(collectionTime); dayEnd.setHours(23, 59, 59, 999);
+
+      const calList = await listCalendars(token);
+      const cals = (calList.items || []).filter((cal) => {
+        if (cal.selected === false) return false;
+        if (/holiday|祝日|contacts|birthday/i.test(cal.id || '')) return false;
+        return true;
+      });
+      const results = await Promise.all(
+        cals.map((cal) =>
+          getEventsInRange(token, cal.id, dayStart, dayEnd)
+            .then((d) => d.items || [])
+            .catch(() => [])
+        )
+      );
+      const items = results.flat().filter((e) => e.start);
+
       // Check overlap with boarding→collection window
       const windowStart = schedule.boardingTime;
       const windowEnd = collectionTime;
