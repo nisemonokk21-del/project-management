@@ -98,12 +98,24 @@ export async function createEventInCalendar(token, calendarId, event) {
   );
 }
 
+// "YYYY-MM-DD" → 翌日の "YYYY-MM-DD"（終日イベントの end.date は排他的なため）
+function nextDay(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d + 1));
+  const yy = dt.getUTCFullYear();
+  const mm = String(dt.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(dt.getUTCDate()).padStart(2, '0');
+  return `${yy}-${mm}-${dd}`;
+}
+
 // dateStr: "YYYY-MM-DD"
 export function buildProvisionalShootingEvent(clientName, dateStr) {
   return {
     summary: `【仮撮影】${clientName}`,
     start: { date: dateStr },
-    end: { date: dateStr },
+    // Google の終日イベントは end.date が排他的（翌日を指定する）。
+    // start と同日だと API が 400 で拒否するため翌日にする。
+    end: { date: nextDay(dateStr) },
     colorId: '6', // tangerine
   };
 }
