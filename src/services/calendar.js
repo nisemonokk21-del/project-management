@@ -121,9 +121,13 @@ function nextDay(dateStr) {
 }
 
 // dateStr: "YYYY-MM-DD"
-export function buildProvisionalShootingEvent(clientName, dateStr) {
+// options: { location, description } — 案件内容の編集結果をカレンダーに反映する
+export function buildProvisionalShootingEvent(clientName, dateStr, options = {}) {
+  const { location, description } = options;
   return {
     summary: `【仮撮影】${clientName}`,
+    ...(location ? { location } : {}),
+    ...(description ? { description } : {}),
     start: { date: dateStr },
     // Google の終日イベントは end.date が排他的（翌日を指定する）。
     // start と同日だと API が 400 で拒否するため翌日にする。
