@@ -36,7 +36,7 @@ export default function App() {
         {activeTab === 'calendar' && <CalendarView />}
         {activeTab === 'line' && <LineScheduler />}
       </main>
-      <footer className="version-footer">v3.2 — バラシ撮影を被りチェック対象外に</footer>
+      <footer className="version-footer">v3.3 — バラシ予定のみ被り除外（他の予定は検知）</footer>
     </div>
   );
 }

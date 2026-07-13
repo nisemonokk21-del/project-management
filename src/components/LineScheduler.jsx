@@ -9,11 +9,15 @@ import {
 } from '../services/calendar';
 
 // カレンダー被りチェック対象
-// ※「バラシ撮影」は記録として残しているだけの予定なので被りにカウントしない（対象外）。
 const CONFLICT_CALENDAR_NAMES = new Set([
-  '演技', 'プライベート', '筋トレ', 'gmail kei', '仮撮影', '決定撮影',
+  'バラシ撮影', '演技', 'プライベート', '筋トレ', 'gmail kei', '仮撮影', '決定撮影',
 ]);
 const PROVISIONAL_CALENDAR_NAME = '仮撮影';
+
+// 「バラシ撮影」カレンダー内の『バラシ』予定は記録として残しているだけで実際の予定ではないため、
+// 被りにカウントしない。それ以外（＝同カレンダー内の本当の予定）は通常どおり被り判定する。
+const TEARDOWN_CALENDAR_NAME = 'バラシ撮影';
+const isTeardownEvent = (event) => (event.summary || '').includes('バラシ');
 
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
 
@@ -157,7 +161,14 @@ export default function LineScheduler() {
           const checks = await Promise.all(
             conflictCals.map((cal) =>
               getEventsFromCalendar(token, cal.id, dateInfo.date)
-                .then((data) => data.items || [])
+                .then((data) => {
+                  const items = data.items || [];
+                  // 「バラシ撮影」カレンダー内の『バラシ』予定だけは被りにカウントしない
+                  if (cal.summary === TEARDOWN_CALENDAR_NAME) {
+                    return items.filter((e) => !isTeardownEvent(e));
+                  }
+                  return items;
+                })
                 .catch(() => [])
             )
           );
