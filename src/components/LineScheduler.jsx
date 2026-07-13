@@ -35,27 +35,29 @@ function buildScheduleText(dates) {
 }
 
 function generateReply(dateResults) {
+  // include（ユーザーの最終判断）を OK/NG に反映して返信文を組み立てる
+  const items = dateResults.map((r) => ({ ...r, status: r.include ? 'ok' : 'ng' }));
   const lines = [];
   let i = 0;
 
-  while (i < dateResults.length) {
-    const curr = dateResults[i];
+  while (i < items.length) {
+    const curr = items[i];
     const isOk = curr.status === 'ok';
     const conflictName = isOk ? null : (curr.conflicts[0]?.summary ?? '他の案件');
 
     // Find consecutive dates with same status (and same conflict name for NG)
     let j = i + 1;
-    while (j < dateResults.length) {
-      const next = dateResults[j];
+    while (j < items.length) {
+      const next = items[j];
       if (next.status !== curr.status) break;
       if (!isOk && (next.conflicts[0]?.summary ?? '他の案件') !== conflictName) break;
-      const prev = new Date(dateResults[j - 1].date + 'T00:00:00');
+      const prev = new Date(items[j - 1].date + 'T00:00:00');
       const cur = new Date(next.date + 'T00:00:00');
       if ((cur - prev) / 86400000 !== 1) break;
       j++;
     }
 
-    const group = dateResults.slice(i, j);
+    const group = items.slice(i, j);
     // Format: "7/16,17" or "7/31,8/1"
     const dateLabel = group
       .map((r, idx) => {
@@ -177,6 +179,8 @@ export default function LineScheduler() {
             ...dateInfo,
             status: conflicts.length > 0 ? 'ng' : 'ok',
             conflicts,
+            // include = ユーザーの最終判断（初期値は自動判定、ボタンで手動切替できる）
+            include: conflicts.length === 0,
           };
         })
       );
@@ -193,6 +197,15 @@ export default function LineScheduler() {
     }
   };
 
+  // OK/NG の手動切替。返信文の下書きも作り直す
+  const toggleDate = (idx) => {
+    const next = dateResults.map((r, i) => (i === idx ? { ...r, include: !r.include } : r));
+    setDateResults(next);
+    setReplyText(generateReply(next));
+    setRegistered(false);
+    setRegisterError('');
+  };
+
   const handleRegister = async () => {
     if (!provisionalCal) return;
     setRegistering(true);
@@ -201,7 +214,7 @@ export default function LineScheduler() {
       const token = await getToken();
       if (!token) throw new Error('Googleログインが必要です。一度ログアウトして再ログインしてください。');
 
-      const okDates = dateResults.filter((r) => r.status === 'ok');
+      const okDates = dateResults.filter((r) => r.include);
       // 案件内容フォームで編集した内容をそのままカレンダーに反映する
       const name = projectInfo.name.trim() || parsed?.clientName || '案件';
       const location = projectInfo.location.trim();
@@ -250,7 +263,7 @@ export default function LineScheduler() {
     setRegisterError('');
   };
 
-  const okCount = dateResults.filter((r) => r.status === 'ok').length;
+  const okCount = dateResults.filter((r) => r.include).length;
 
   return (
     <div className="line-scheduler">
@@ -369,33 +382,36 @@ export default function LineScheduler() {
                 ⚠️ 「仮撮影」カレンダーが見つからなかったためカレンダー登録できません
               </div>
             )}
+            <p className="ls-hint">ボタンでOK/NGを切り替えられます（返信文の下書きも自動で更新されます）</p>
             <div className="ls-date-list">
               {dateResults.map((r, i) => (
                 <div
                   key={i}
-                  className={`ls-date-item ${r.status === 'ok' ? 'ls-ok' : 'ls-ng'}`}
+                  className={`ls-date-item ${r.include ? 'ls-ok' : 'ls-ng'}`}
                 >
-                  <div className="ls-date-label">
-                    <span className="ls-date-text">{formatDateJP(r.date)}</span>
-                    {r.label && (
-                      <span className="ls-candidate-label">{r.label}</span>
-                    )}
-                  </div>
-                  <div className="ls-date-status">
-                    {r.status === 'ok' ? (
-                      <span className="ls-status-ok">
-                        ✅ OK{registered ? '  → 仮撮影登録済み' : ''}
-                      </span>
-                    ) : (
-                      <span className="ls-status-ng">
-                        ❌{' '}
+                  <div className="ls-date-main">
+                    <div className="ls-date-label">
+                      <span className="ls-date-text">{formatDateJP(r.date)}</span>
+                      {r.label && (
+                        <span className="ls-candidate-label">{r.label}</span>
+                      )}
+                    </div>
+                    {r.conflicts.length > 0 && (
+                      <div className="ls-conflict-list">
+                        ⚠️{' '}
                         {r.conflicts
                           .map((c) => c.summary)
                           .filter(Boolean)
                           .join(' / ') || '他の予定あり'}
-                      </span>
+                      </div>
                     )}
                   </div>
+                  <button
+                    className={`ls-toggle-btn ${r.include ? 'ls-t-ok' : 'ls-t-ng'}`}
+                    onClick={() => toggleDate(i)}
+                  >
+                    {r.include ? '✅ OK' : '❌ NG'}
+                  </button>
                 </div>
               ))}
             </div>
@@ -425,7 +441,7 @@ export default function LineScheduler() {
           {/* Reply text */}
           <div className="card">
             <div className="ls-reply-header">
-              <h3 style={{ margin: 0 }}>💬 返信文</h3>
+              <h3 style={{ margin: 0 }}>💬 返信文（下書き）</h3>
               <button
                 className={`ls-copy-btn${copied ? ' ls-copied' : ''}`}
                 onClick={handleCopy}
@@ -433,7 +449,13 @@ export default function LineScheduler() {
                 {copied ? '✓ コピー済み' : '📋 コピー'}
               </button>
             </div>
-            <pre className="ls-reply-text">{replyText}</pre>
+            <p className="ls-hint">自由に編集できます。OK/NGを切り替えると下書きは作り直されます。</p>
+            <textarea
+              className="ls-reply-textarea"
+              value={replyText}
+              onChange={(e) => setReplyText(e.target.value)}
+              rows={10}
+            />
           </div>
         </>
       )}

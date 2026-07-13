@@ -792,6 +792,56 @@ input:focus, select:focus {
 .ls-status-ok { color: var(--success); }
 .ls-status-ng { color: var(--danger); }
 
+.ls-hint { font-size: 12px; color: var(--gray-500); margin-bottom: 10px; }
+
+.ls-date-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+.ls-conflict-list {
+  font-size: 12.5px;
+  color: var(--danger);
+  line-height: 1.5;
+}
+.ls-toggle-btn {
+  flex-shrink: 0;
+  background: #fff;
+  border: 1.5px solid;
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-size: 14px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background .15s;
+}
+.ls-toggle-btn.ls-t-ok { color: var(--success); border-color: var(--success); }
+.ls-toggle-btn.ls-t-ng { color: var(--danger); border-color: var(--danger); }
+
+.ls-reply-textarea {
+  width: 100%;
+  padding: 14px 16px;
+  border: 1.5px solid var(--gray-300);
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  line-height: 1.9;
+  resize: vertical;
+  min-height: 200px;
+  color: var(--gray-900);
+  background: var(--gray-50);
+  transition: border-color .15s;
+}
+.ls-reply-textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(37,99,235,.1);
+}
+
 .ls-reply-header {
   display: flex;
   align-items: center;

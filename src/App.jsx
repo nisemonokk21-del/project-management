@@ -36,7 +36,7 @@ export default function App() {
         {activeTab === 'calendar' && <CalendarView />}
         {activeTab === 'line' && <LineScheduler />}
       </main>
-      <footer className="version-footer">v3.3 — バラシ予定のみ被り除外（他の予定は検知）</footer>
+      <footer className="version-footer">v3.4 — OK/NG手動切替・返信文の編集を復活</footer>
     </div>
   );
 }
