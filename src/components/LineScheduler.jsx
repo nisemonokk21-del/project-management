@@ -22,6 +22,13 @@ function formatDateJP(dateStr) {
   return `${m}/${d}(${day})`;
 }
 
+// パースした候補日を「7/16(火), 7/17(水)」のような日程文字列にまとめる
+function buildScheduleText(dates) {
+  return (dates || [])
+    .map((d) => (typeof d === 'string' ? formatDateJP(d) : formatDateJP(d.date)))
+    .join('、');
+}
+
 function generateReply(dateResults) {
   const lines = [];
   let i = 0;
@@ -75,6 +82,13 @@ export default function LineScheduler() {
   const [loading, setLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
   const [parsed, setParsed] = useState(null);
+  // 案件内容（編集可能）。案件名 / 日程 / 場所 / 内容(原文ママ)
+  const [projectInfo, setProjectInfo] = useState({
+    name: '',
+    schedule: '',
+    location: '',
+    content: '',
+  });
   const [dateResults, setDateResults] = useState([]);
   const [provisionalCal, setProvisionalCal] = useState(null);
   const [replyText, setReplyText] = useState('');
@@ -96,6 +110,7 @@ export default function LineScheduler() {
     setLoading(true);
     setError('');
     setParsed(null);
+    setProjectInfo({ name: '', schedule: '', location: '', content: '' });
     setDateResults([]);
     setReplyText('');
     setCopied(false);
@@ -110,6 +125,13 @@ export default function LineScheduler() {
       setStatusMsg('LINE文を解析中...');
       const parsedData = await parseLineMessage(lineText.trim());
       setParsed(parsedData);
+      // 案件内容フォームの初期値をパース結果から流し込む（内容は原文ママ）
+      setProjectInfo({
+        name: parsedData.clientName || '',
+        schedule: buildScheduleText(parsedData.dates),
+        location: parsedData.location || '',
+        content: lineText.trim(),
+      });
 
       if (!parsedData.dates?.length) {
         throw new Error('候補日が見つかりませんでした。LINE文に日付が含まれているか確認してください。');
@@ -168,12 +190,16 @@ export default function LineScheduler() {
       if (!token) throw new Error('Googleログインが必要です。一度ログアウトして再ログインしてください。');
 
       const okDates = dateResults.filter((r) => r.status === 'ok');
+      // 案件内容フォームで編集した内容をそのままカレンダーに反映する
+      const name = projectInfo.name.trim() || parsed?.clientName || '案件';
+      const location = projectInfo.location.trim();
+      const description = projectInfo.content.trim();
       await Promise.all(
         okDates.map((r) =>
           createEventInCalendar(
             token,
             provisionalCal.id,
-            buildProvisionalShootingEvent(parsed?.clientName || '案件', r.date)
+            buildProvisionalShootingEvent(name, r.date, { location, description })
           )
         )
       );
@@ -201,6 +227,7 @@ export default function LineScheduler() {
     setStatusMsg('');
     setError('');
     setParsed(null);
+    setProjectInfo({ name: '', schedule: '', location: '', content: '' });
     setDateResults([]);
     setProvisionalCal(null);
     setReplyText('');
@@ -258,29 +285,66 @@ export default function LineScheduler() {
       {/* Results */}
       {done && (
         <>
-          {/* Parsed info */}
-          {parsed && (parsed.clientName || parsed.role || parsed.location) && (
+          {/* 案件内容（編集可能） */}
+          {parsed && (
             <div className="card">
-              <h3>📋 解析結果</h3>
-              <div className="ls-meta">
-                {parsed.clientName && (
-                  <div>
-                    <span className="ls-label">案件名</span>
-                    {parsed.clientName}
-                  </div>
-                )}
-                {parsed.role && (
-                  <div>
-                    <span className="ls-label">役柄</span>
-                    {parsed.role}
-                  </div>
-                )}
-                {parsed.location && (
-                  <div>
-                    <span className="ls-label">場所</span>
-                    {parsed.location}
-                  </div>
-                )}
+              <h3>📋 案件内容</h3>
+              <p className="ls-edit-hint">
+                内容を確認・修正できます。ここで編集した内容がそのままカレンダーに反映されます。
+              </p>
+              <div className="ls-edit-form">
+                <div className="ls-field">
+                  <label className="ls-field-label" htmlFor="pi-name">案件名</label>
+                  <input
+                    id="pi-name"
+                    type="text"
+                    className="ls-input"
+                    value={projectInfo.name}
+                    onChange={(e) =>
+                      setProjectInfo((p) => ({ ...p, name: e.target.value }))
+                    }
+                    placeholder="案件名"
+                  />
+                </div>
+                <div className="ls-field">
+                  <label className="ls-field-label" htmlFor="pi-schedule">日程</label>
+                  <input
+                    id="pi-schedule"
+                    type="text"
+                    className="ls-input"
+                    value={projectInfo.schedule}
+                    onChange={(e) =>
+                      setProjectInfo((p) => ({ ...p, schedule: e.target.value }))
+                    }
+                    placeholder="例：7/16(火)、7/17(水)"
+                  />
+                </div>
+                <div className="ls-field">
+                  <label className="ls-field-label" htmlFor="pi-location">場所</label>
+                  <input
+                    id="pi-location"
+                    type="text"
+                    className="ls-input"
+                    value={projectInfo.location}
+                    onChange={(e) =>
+                      setProjectInfo((p) => ({ ...p, location: e.target.value }))
+                    }
+                    placeholder="場所"
+                  />
+                </div>
+                <div className="ls-field">
+                  <label className="ls-field-label" htmlFor="pi-content">内容(原文ママ)</label>
+                  <textarea
+                    id="pi-content"
+                    className="ls-input ls-textarea"
+                    value={projectInfo.content}
+                    onChange={(e) =>
+                      setProjectInfo((p) => ({ ...p, content: e.target.value }))
+                    }
+                    rows={6}
+                    placeholder="原文ママ"
+                  />
+                </div>
               </div>
             </div>
           )}

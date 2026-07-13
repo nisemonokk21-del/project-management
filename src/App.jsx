@@ -36,7 +36,7 @@ export default function App() {
         {activeTab === 'calendar' && <CalendarView />}
         {activeTab === 'line' && <LineScheduler />}
       </main>
-      <footer className="version-footer">v3.0 — LINE返信自動生成</footer>
+      <footer className="version-footer">v3.1 — 案件内容の編集・カレンダー反映</footer>
     </div>
   );
 }
