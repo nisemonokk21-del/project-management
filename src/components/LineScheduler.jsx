@@ -9,8 +9,9 @@ import {
 } from '../services/calendar';
 
 // カレンダー被りチェック対象
+// ※「バラシ撮影」は記録として残しているだけの予定なので被りにカウントしない（対象外）。
 const CONFLICT_CALENDAR_NAMES = new Set([
-  'バラシ撮影', '演技', 'プライベート', '筋トレ', 'gmail kei', '仮撮影', '決定撮影',
+  '演技', 'プライベート', '筋トレ', 'gmail kei', '仮撮影', '決定撮影',
 ]);
 const PROVISIONAL_CALENDAR_NAME = '仮撮影';
 

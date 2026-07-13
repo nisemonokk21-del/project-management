@@ -36,7 +36,7 @@ export default function App() {
         {activeTab === 'calendar' && <CalendarView />}
         {activeTab === 'line' && <LineScheduler />}
       </main>
-      <footer className="version-footer">v3.1 — 案件内容の編集・カレンダー反映</footer>
+      <footer className="version-footer">v3.2 — バラシ撮影を被りチェック対象外に</footer>
     </div>
   );
 }
