@@ -16,27 +16,30 @@ export default function App() {
 
   if (!user) return <Login />;
 
-  const handleTabChange = (tab) => {
-    setActiveTab(tab);
-    setResult(null);
-  };
-
+  // タブは表示を切り替えるだけでアンマウントしない。
+  // これで別タブに移動しても各タブ（LINE返信など）の入力・結果が保持される。
   return (
     <div className="app">
-      <Header activeTab={activeTab} setActiveTab={handleTabChange} />
+      <Header activeTab={activeTab} setActiveTab={setActiveTab} />
       <main className="main">
-        {activeTab === 'project' && (
-          result ? (
+        <div hidden={activeTab !== 'project'}>
+          {result ? (
             <ProjectResult result={result} onReset={() => setResult(null)} />
           ) : (
             <ProjectForm onResult={setResult} />
-          )
-        )}
-        {activeTab === 'expenses' && <ExpenseManager />}
-        {activeTab === 'calendar' && <CalendarView />}
-        {activeTab === 'line' && <LineScheduler />}
+          )}
+        </div>
+        <div hidden={activeTab !== 'expenses'}>
+          <ExpenseManager />
+        </div>
+        <div hidden={activeTab !== 'calendar'}>
+          <CalendarView />
+        </div>
+        <div hidden={activeTab !== 'line'}>
+          <LineScheduler />
+        </div>
       </main>
-      <footer className="version-footer">v3.4 — OK/NG手動切替・返信文の編集を復活</footer>
+      <footer className="version-footer">v3.5 — 被り参照先を修正・タブ切替で保持・ログインタイミング改善</footer>
     </div>
   );
 }

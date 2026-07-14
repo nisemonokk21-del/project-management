@@ -19,6 +19,10 @@ const PROVISIONAL_CALENDAR_NAME = '仮撮影';
 const TEARDOWN_CALENDAR_NAME = 'バラシ撮影';
 const isTeardownEvent = (event) => (event.summary || '').includes('バラシ');
 
+// カレンダーの実際の表示名。共有カレンダーを自分でリネームしている場合は
+// summaryOverride が入るため、そちらを優先する。
+const calName = (cal) => cal.summaryOverride || cal.summary;
+
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
 
 function formatDateJP(dateStr) {
@@ -128,6 +132,14 @@ export default function LineScheduler() {
     setRegisterError('');
 
     try {
+      // Step 0: 先にカレンダー用トークンを取得する。
+      // ※ ログインのポップアップは「ボタンを押した操作」から直接開く必要がある。
+      //    非同期処理の後に開くとモバイルSafariで失敗（missing initial state）するため、
+      //    最初のawaitとしてトークン取得を行う。
+      setStatusMsg('カレンダー権限を確認中...');
+      const token = await getToken();
+      if (!token) throw new Error('Googleログインが必要です。一度ログアウトして再ログインしてください。');
+
       // Step 1: Parse LINE text via Cloud Function → Claude API
       setStatusMsg('LINE文を解析中...');
       const parsedData = await parseLineMessage(lineText.trim());
@@ -146,14 +158,13 @@ export default function LineScheduler() {
 
       // Step 2: Load user's calendar list
       setStatusMsg('カレンダーを読み込み中...');
-      const token = await getToken();
-      if (!token) throw new Error('Googleログインが必要です。一度ログアウトして再ログインしてください。');
-
       const calListData = await listCalendars(token);
       const allCals = calListData.items || [];
 
-      const conflictCals = allCals.filter((cal) => CONFLICT_CALENDAR_NAMES.has(cal.summary));
-      const provisionalCal = allCals.find((cal) => cal.summary === PROVISIONAL_CALENDAR_NAME);
+      // 共有カレンダーは自分で表示名（summaryOverride）を付けている場合があるため、
+      // 表示名を優先して判定する（CalendarView と同じ見え方に合わせる）。
+      const conflictCals = allCals.filter((cal) => CONFLICT_CALENDAR_NAMES.has(calName(cal)));
+      const provisionalCal = allCals.find((cal) => calName(cal) === PROVISIONAL_CALENDAR_NAME);
       setProvisionalCal(provisionalCal ?? null);
 
       // Step 3: Check each candidate date for conflicts (parallel)
@@ -166,7 +177,7 @@ export default function LineScheduler() {
                 .then((data) => {
                   const items = data.items || [];
                   // 「バラシ撮影」カレンダー内の『バラシ』予定だけは被りにカウントしない
-                  if (cal.summary === TEARDOWN_CALENDAR_NAME) {
+                  if (calName(cal) === TEARDOWN_CALENDAR_NAME) {
                     return items.filter((e) => !isTeardownEvent(e));
                   }
                   return items;
