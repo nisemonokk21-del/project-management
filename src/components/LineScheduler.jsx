@@ -2,19 +2,21 @@ import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { parseLineMessage } from '../services/lineParser';
 import { jstDateString } from '../utils/timeUtils';
+import { fixParsedYear, generateReply } from '../services/scheduleReply';
 import {
   listCalendars,
   getEventsFromCalendar,
   createEventInCalendar,
   buildProvisionalShootingEvent,
   calDisplayName as calName,
+  conflictCalendars,
   realEvents,
 } from '../services/calendar';
 
-// 被りチェックは登録済みの「全カレンダー」が対象（除外なし）。
+// 被りチェックは「バラシ撮影を除く全カレンダー」が対象。
 // 名前の完全一致リストやシステムカレンダー判定で絞ると、共有カレンダー
 // （例:「kei.imagawa.a@gmail.com」表示のもの）を取りこぼして被りを見落とすため、
-// いったん一切絞らずカレンダーリストにある全部を確認する。
+// バラシ撮影以外はカレンダーリストにある全部を確認する。
 const PROVISIONAL_CALENDAR_NAME = '仮撮影';
 
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
@@ -31,73 +33,11 @@ function formatDateJPWithYear(dateStr) {
   return `${y}/${formatDateJP(dateStr)}`;
 }
 
-// LINE解析が返した候補日の年ずれ対策。
-// 候補日は常に「これから」の日付のはずなので、過去の日付が返ってきたら
-// 年の推測ミスとみなし、今日以降になるまで年を進める（最大2年）。
-// 例: 今日が2026-07-15のとき「2025-07-16」→「2026-07-16」に補正。
-function fixParsedYear(dateStr, todayStr) {
-  let s = dateStr;
-  for (let i = 0; i < 2 && s < todayStr; i++) {
-    const [y, m, d] = s.split('-').map(Number);
-    s = `${y + 1}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-  }
-  return s;
-}
-
 // パースした候補日を「7/16(火), 7/17(水)」のような日程文字列にまとめる
 function buildScheduleText(dates) {
   return (dates || [])
     .map((d) => (typeof d === 'string' ? formatDateJP(d) : formatDateJP(d.date)))
     .join('、');
-}
-
-function generateReply(dateResults) {
-  // include（ユーザーの最終判断）を OK/NG に反映して返信文を組み立てる
-  const items = dateResults.map((r) => ({ ...r, status: r.include ? 'ok' : 'ng' }));
-  const lines = [];
-  let i = 0;
-
-  while (i < items.length) {
-    const curr = items[i];
-    const isOk = curr.status === 'ok';
-    const conflictName = isOk ? null : (curr.conflicts[0]?.summary ?? '他の案件');
-
-    // Find consecutive dates with same status (and same conflict name for NG)
-    let j = i + 1;
-    while (j < items.length) {
-      const next = items[j];
-      if (next.status !== curr.status) break;
-      if (!isOk && (next.conflicts[0]?.summary ?? '他の案件') !== conflictName) break;
-      const prev = new Date(items[j - 1].date + 'T00:00:00');
-      const cur = new Date(next.date + 'T00:00:00');
-      if ((cur - prev) / 86400000 !== 1) break;
-      j++;
-    }
-
-    const group = items.slice(i, j);
-    // Format: "7/16,17" or "7/31,8/1"
-    const dateLabel = group
-      .map((r, idx) => {
-        const [, m, d] = r.date.split('-').map(Number);
-        if (idx === 0) return `${m}/${d}`;
-        const [, prevM] = group[idx - 1].date.split('-').map(Number);
-        return m === prevM ? `${d}` : `${m}/${d}`;
-      })
-      .join(',');
-
-    lines.push(isOk ? `${dateLabel} OK` : `${dateLabel} ${conflictName}`);
-    i = j;
-  }
-
-  return [
-    'お疲れ様です！',
-    'ご連絡ありがとうございます',
-    '',
-    ...lines,
-    '',
-    'となっています。',
-    'よろしくお願いします！',
-  ].join('\n');
 }
 
 export default function LineScheduler() {
@@ -189,8 +129,8 @@ export default function LineScheduler() {
       const calListData = await listCalendars(token);
       const allCals = calListData.items || [];
 
-      // いったん除外なし。カレンダーリストにある全カレンダーを被りチェック対象にする
-      const conflictCals = allCals;
+      // バラシ撮影を除く全カレンダーを被りチェック対象にする
+      const conflictCals = conflictCalendars(allCals);
       setCheckedCalNames(conflictCals.map(calName));
       const provisionalCal = allCals.find((cal) => calName(cal) === PROVISIONAL_CALENDAR_NAME);
       setProvisionalCal(provisionalCal ?? null);
@@ -203,7 +143,11 @@ export default function LineScheduler() {
           const checks = await Promise.all(
             conflictCals.map((cal) =>
               getEventsFromCalendar(token, cal.id, dateInfo.date)
-                .then((data) => realEvents(cal, data.items))
+                // どのカレンダーの予定か（calName）を各予定に付けておく。
+                // 返信文で「撮影案件だけ名前を出す」判定に使う。
+                .then((data) =>
+                  realEvents(cal, data.items).map((e) => ({ ...e, calName: calName(cal) }))
+                )
                 // 取得失敗を黙って「予定なし」扱いにすると被りを見落とすため、失敗として記録する
                 .catch(() => {
                   failedCals.add(calName(cal));
