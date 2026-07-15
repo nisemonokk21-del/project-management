@@ -7,13 +7,13 @@ import {
   createEventInCalendar,
   buildProvisionalShootingEvent,
   calDisplayName as calName,
-  isSystemCalendar,
   realEvents,
 } from '../services/calendar';
 
-// 被りチェックは登録済みの全カレンダーが対象（祝日・誕生日などのシステムカレンダーを除く）。
-// 名前の完全一致リスト方式だと、リネームしていない共有カレンダー
-// （例:「kei.imagawa.a@gmail.com」表示のままのもの）が対象外になり被りを見落とす。
+// 被りチェックは登録済みの「全カレンダー」が対象（除外なし）。
+// 名前の完全一致リストやシステムカレンダー判定で絞ると、共有カレンダー
+// （例:「kei.imagawa.a@gmail.com」表示のもの）を取りこぼして被りを見落とすため、
+// いったん一切絞らずカレンダーリストにある全部を確認する。
 const PROVISIONAL_CALENDAR_NAME = '仮撮影';
 
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
@@ -159,8 +159,8 @@ export default function LineScheduler() {
       const calListData = await listCalendars(token);
       const allCals = calListData.items || [];
 
-      // 祝日・誕生日などのシステムカレンダーを除き、登録済みの全カレンダーを対象にする
-      const conflictCals = allCals.filter((cal) => !isSystemCalendar(cal));
+      // いったん除外なし。カレンダーリストにある全カレンダーを被りチェック対象にする
+      const conflictCals = allCals;
       setCheckedCalNames(conflictCals.map(calName));
       const provisionalCal = allCals.find((cal) => calName(cal) === PROVISIONAL_CALENDAR_NAME);
       setProvisionalCal(provisionalCal ?? null);
