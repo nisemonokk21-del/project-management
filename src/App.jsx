@@ -39,7 +39,7 @@ export default function App() {
           <LineScheduler />
         </div>
       </main>
-      <footer className="version-footer">v3.8 — 当日被りを終日チェックに修正（乗車〜集合限定を廃止）・候補日の年ずれ補正</footer>
+      <footer className="version-footer">v3.9 — バラシ撮影を被り除外・返信文は撮影案件のみ名前表示/他はNG・返信ロジックにテスト追加</footer>
     </div>
   );
 }

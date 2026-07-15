@@ -8,6 +8,7 @@ import {
   buildWakeEvent,
   buildBedEvent,
   calDisplayName,
+  conflictCalendars,
   realEvents,
 } from '../services/calendar';
 import { formatTime, formatDate, formatDateTime } from '../utils/timeUtils';
@@ -36,9 +37,9 @@ export default function ProjectResult({ result, onReset }) {
     try {
       const token = await getToken();
       if (!token) { setCalError('再ログインが必要です'); return; }
-      // primaryだけでなく、カレンダーリストにある全カレンダー（除外なし）を確認する
+      // primaryだけでなく、バラシ撮影を除く全カレンダーを確認する
       const calListData = await listCalendars(token);
-      const cals = calListData.items || [];
+      const cals = conflictCalendars(calListData.items || []);
       setCheckedCalNames(cals.map(calDisplayName));
       const dateStr = collectionTime.toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
       const failed = [];

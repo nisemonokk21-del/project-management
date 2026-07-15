@@ -27,19 +27,25 @@ export const calDisplayName = (cal) => cal.summaryOverride || cal.summary;
 // @group.calendar.google.com で「.v」が入らない）ため区別できる。
 export const isSystemCalendar = (cal) => (cal.id || '').endsWith('@group.v.calendar.google.com');
 
-// 「バラシ撮影」カレンダー内の『バラシ』予定は記録として残しているだけで
-// 実際の予定ではないため、被りにカウントしない。
+// 「バラシ撮影」カレンダーは撮影後の記録用で実際の予定ではないため、
+// 被りチェックからはカレンダーごと丸ごと除外する。
 export const TEARDOWN_CALENDAR_NAME = 'バラシ撮影';
-export const isTeardownEvent = (event) => (event.summary || '').includes('バラシ');
 
-// 被り判定にかける実予定だけを残す
-// （キャンセル済みと、バラシ撮影カレンダーの『バラシ』記録を除外）
+// 被りチェックの対象にしないカレンダー（表示名で判定）
+const EXCLUDED_CONFLICT_CALENDAR_NAMES = new Set([TEARDOWN_CALENDAR_NAME]);
+
+// 被りチェック対象のカレンダーだけに絞り込む。
+// 祝日等のシステムカレンダーはあえて除外しない（共有カレンダーを取りこぼさないため。
+// 過去にallowlist方式で共有カレンダーを見落として被りが出なかった経緯がある）。
+export function conflictCalendars(cals) {
+  return (cals || []).filter(
+    (c) => !EXCLUDED_CONFLICT_CALENDAR_NAMES.has(calDisplayName(c))
+  );
+}
+
+// 被り判定にかける実予定だけを残す（キャンセル済みを除外）
 export function realEvents(cal, items) {
-  const active = (items || []).filter((e) => e.status !== 'cancelled');
-  if (calDisplayName(cal) === TEARDOWN_CALENDAR_NAME) {
-    return active.filter((e) => !isTeardownEvent(e));
-  }
-  return active;
+  return (items || []).filter((e) => e.status !== 'cancelled');
 }
 
 export async function createEvent(token, event) {
