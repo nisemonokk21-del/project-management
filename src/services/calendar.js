@@ -18,19 +18,28 @@ async function apiFetch(url, token, options = {}) {
   return res.json();
 }
 
-export async function getEvents(token, dateObj) {
-  const start = new Date(dateObj);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(dateObj);
-  end.setHours(23, 59, 59, 999);
+// カレンダーの実際の表示名。共有カレンダーを自分でリネームしている場合は
+// summaryOverride が入るため、そちらを優先する。
+export const calDisplayName = (cal) => cal.summaryOverride || cal.summary;
 
-  const url = new URL(`${BASE}/calendars/primary/events`);
-  url.searchParams.set('timeMin', start.toISOString());
-  url.searchParams.set('timeMax', end.toISOString());
-  url.searchParams.set('singleEvents', 'true');
-  url.searchParams.set('orderBy', 'startTime');
+// 祝日・誕生日などGoogle提供のシステムカレンダー。
+// idが @group.v.calendar.google.com で終わる（ユーザー作成の共有カレンダーは
+// @group.calendar.google.com で「.v」が入らない）ため区別できる。
+export const isSystemCalendar = (cal) => (cal.id || '').endsWith('@group.v.calendar.google.com');
 
-  return apiFetch(url.toString(), token);
+// 「バラシ撮影」カレンダー内の『バラシ』予定は記録として残しているだけで
+// 実際の予定ではないため、被りにカウントしない。
+export const TEARDOWN_CALENDAR_NAME = 'バラシ撮影';
+export const isTeardownEvent = (event) => (event.summary || '').includes('バラシ');
+
+// 被り判定にかける実予定だけを残す
+// （キャンセル済みと、バラシ撮影カレンダーの『バラシ』記録を除外）
+export function realEvents(cal, items) {
+  const active = (items || []).filter((e) => e.status !== 'cancelled');
+  if (calDisplayName(cal) === TEARDOWN_CALENDAR_NAME) {
+    return active.filter((e) => !isTeardownEvent(e));
+  }
+  return active;
 }
 
 export async function createEvent(token, event) {

@@ -6,22 +6,15 @@ import {
   getEventsFromCalendar,
   createEventInCalendar,
   buildProvisionalShootingEvent,
+  calDisplayName as calName,
+  isSystemCalendar,
+  realEvents,
 } from '../services/calendar';
 
-// カレンダー被りチェック対象
-const CONFLICT_CALENDAR_NAMES = new Set([
-  'バラシ撮影', '演技', 'プライベート', '筋トレ', 'gmail kei', '仮撮影', '決定撮影',
-]);
+// 被りチェックは登録済みの全カレンダーが対象（祝日・誕生日などのシステムカレンダーを除く）。
+// 名前の完全一致リスト方式だと、リネームしていない共有カレンダー
+// （例:「kei.imagawa.a@gmail.com」表示のままのもの）が対象外になり被りを見落とす。
 const PROVISIONAL_CALENDAR_NAME = '仮撮影';
-
-// 「バラシ撮影」カレンダー内の『バラシ』予定は記録として残しているだけで実際の予定ではないため、
-// 被りにカウントしない。それ以外（＝同カレンダー内の本当の予定）は通常どおり被り判定する。
-const TEARDOWN_CALENDAR_NAME = 'バラシ撮影';
-const isTeardownEvent = (event) => (event.summary || '').includes('バラシ');
-
-// カレンダーの実際の表示名。共有カレンダーを自分でリネームしている場合は
-// summaryOverride が入るため、そちらを優先する。
-const calName = (cal) => cal.summaryOverride || cal.summary;
 
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
 
@@ -102,6 +95,9 @@ export default function LineScheduler() {
   });
   const [dateResults, setDateResults] = useState([]);
   const [provisionalCal, setProvisionalCal] = useState(null);
+  // 実際に被りチェックしたカレンダー名／取得に失敗したカレンダー名（結果の信頼性を確認できるように表示する）
+  const [checkedCalNames, setCheckedCalNames] = useState([]);
+  const [failedCalNames, setFailedCalNames] = useState([]);
   const [replyText, setReplyText] = useState('');
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
@@ -127,6 +123,8 @@ export default function LineScheduler() {
     setCopied(false);
     setDone(false);
     setProvisionalCal(null);
+    setCheckedCalNames([]);
+    setFailedCalNames([]);
     setRegistering(false);
     setRegistered(false);
     setRegisterError('');
@@ -161,31 +159,29 @@ export default function LineScheduler() {
       const calListData = await listCalendars(token);
       const allCals = calListData.items || [];
 
-      // 共有カレンダーは自分で表示名（summaryOverride）を付けている場合があるため、
-      // 表示名を優先して判定する（CalendarView と同じ見え方に合わせる）。
-      const conflictCals = allCals.filter((cal) => CONFLICT_CALENDAR_NAMES.has(calName(cal)));
+      // 祝日・誕生日などのシステムカレンダーを除き、登録済みの全カレンダーを対象にする
+      const conflictCals = allCals.filter((cal) => !isSystemCalendar(cal));
+      setCheckedCalNames(conflictCals.map(calName));
       const provisionalCal = allCals.find((cal) => calName(cal) === PROVISIONAL_CALENDAR_NAME);
       setProvisionalCal(provisionalCal ?? null);
 
       // Step 3: Check each candidate date for conflicts (parallel)
       setStatusMsg(`${parsedData.dates.length}件の候補日を確認中...`);
+      const failedCals = new Set();
       const results = await Promise.all(
         parsedData.dates.map(async (dateInfo) => {
           const checks = await Promise.all(
             conflictCals.map((cal) =>
               getEventsFromCalendar(token, cal.id, dateInfo.date)
-                .then((data) => {
-                  const items = data.items || [];
-                  // 「バラシ撮影」カレンダー内の『バラシ』予定だけは被りにカウントしない
-                  if (calName(cal) === TEARDOWN_CALENDAR_NAME) {
-                    return items.filter((e) => !isTeardownEvent(e));
-                  }
-                  return items;
+                .then((data) => realEvents(cal, data.items))
+                // 取得失敗を黙って「予定なし」扱いにすると被りを見落とすため、失敗として記録する
+                .catch(() => {
+                  failedCals.add(calName(cal));
+                  return [];
                 })
-                .catch(() => [])
             )
           );
-          const conflicts = checks.flat().filter((e) => e.summary);
+          const conflicts = checks.flat();
           return {
             ...dateInfo,
             status: conflicts.length > 0 ? 'ng' : 'ok',
@@ -195,6 +191,8 @@ export default function LineScheduler() {
           };
         })
       );
+
+      setFailedCalNames([...failedCals]);
 
       // Step 4: Generate reply text (calendar registration now happens on manual confirmation)
       setDateResults(results);
@@ -266,6 +264,8 @@ export default function LineScheduler() {
     setProjectInfo({ name: '', schedule: '', location: '', content: '' });
     setDateResults([]);
     setProvisionalCal(null);
+    setCheckedCalNames([]);
+    setFailedCalNames([]);
     setReplyText('');
     setCopied(false);
     setDone(false);
@@ -392,6 +392,15 @@ export default function LineScheduler() {
               <div className="warn-text" style={{ marginBottom: '14px' }}>
                 ⚠️ 「仮撮影」カレンダーが見つからなかったためカレンダー登録できません
               </div>
+            )}
+            {failedCalNames.length > 0 && (
+              <div className="warn-text" style={{ marginBottom: '14px' }}>
+                ⚠️ 取得に失敗したカレンダー: {failedCalNames.join('、')}
+                （このカレンダーの被りは見落としている可能性があります）
+              </div>
+            )}
+            {checkedCalNames.length > 0 && (
+              <p className="ls-hint">被りチェック対象カレンダー: {checkedCalNames.join('、')}</p>
             )}
             <p className="ls-hint">ボタンでOK/NGを切り替えられます（返信文の下書きも自動で更新されます）</p>
             <div className="ls-date-list">

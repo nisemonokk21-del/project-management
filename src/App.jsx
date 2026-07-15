@@ -39,7 +39,7 @@ export default function App() {
           <LineScheduler />
         </div>
       </main>
-      <footer className="version-footer">v3.5 — 被り参照先を修正・タブ切替で保持・ログインタイミング改善</footer>
+      <footer className="version-footer">v3.6 — 被りチェックを全カレンダー対象に修正（名前一致方式を廃止・見落とし解消）</footer>
     </div>
   );
 }
