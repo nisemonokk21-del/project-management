@@ -1,11 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import {
-  getEvents,
+  listCalendars,
+  getEventsFromCalendar,
   createEvent,
   buildProjectEvent,
   buildWakeEvent,
   buildBedEvent,
+  calDisplayName,
+  isSystemCalendar,
+  realEvents,
 } from '../services/calendar';
 import { formatTime, formatDate, formatDateTime } from '../utils/timeUtils';
 import { yahooTransitUrl, ORIGIN_STATION } from '../services/transitLinks';
@@ -32,17 +36,34 @@ export default function ProjectResult({ result, onReset }) {
     try {
       const token = await getToken();
       if (!token) { setCalError('再ログインが必要です'); return; }
-      const data = await getEvents(token, collectionTime);
-      const items = data.items || [];
+      // primaryだけでなく、登録済みの全カレンダー（祝日等のシステムカレンダーを除く）を確認する
+      const calListData = await listCalendars(token);
+      const cals = (calListData.items || []).filter((c) => !isSystemCalendar(c));
+      const dateStr = collectionTime.toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
+      const failed = [];
+      const perCal = await Promise.all(
+        cals.map((cal) =>
+          getEventsFromCalendar(token, cal.id, dateStr)
+            .then((data) => realEvents(cal, data.items))
+            .catch(() => {
+              failed.push(calDisplayName(cal));
+              return [];
+            })
+        )
+      );
       // Check overlap with boarding→collection window
       const windowStart = schedule.boardingTime;
       const windowEnd = collectionTime;
-      const found = items.filter((e) => {
-        const s = new Date(e.start.dateTime || e.start.date);
-        const en = new Date(e.end.dateTime || e.end.date);
-        return s < windowEnd && en > windowStart;
+      // 終日イベント（date形式）はJSTの0時起点として扱う
+      // （素のnew Date("YYYY-MM-DD")はUTC解釈＝朝9時扱いになり、早朝集合の被りを見落とす）
+      const toDate = (v) => (v.dateTime ? new Date(v.dateTime) : new Date(v.date + 'T00:00:00+09:00'));
+      const found = perCal.flat().filter((e) => {
+        return toDate(e.start) < windowEnd && toDate(e.end) > windowStart;
       });
       setConflicts(found);
+      if (failed.length > 0) {
+        setCalError(`一部カレンダーの取得に失敗しました（${failed.join('、')}）。被りを見落としている可能性があります。`);
+      }
       setCalendarChecked(true);
     } catch (err) {
       if (err.status === 401) {
@@ -170,9 +191,11 @@ export default function ProjectResult({ result, onReset }) {
                   <h4>⚠️ 当日の予定と重なっています</h4>
                   {conflicts.map((e, i) => (
                     <div key={i} className="conflict-item">
-                      <span className="conflict-title">{e.summary}</span>
+                      <span className="conflict-title">{e.summary || '(無題の予定)'}</span>
                       <span className="conflict-time">
-                        {formatDateTime(new Date(e.start.dateTime || e.start.date))}
+                        {e.start.dateTime
+                          ? formatDateTime(new Date(e.start.dateTime))
+                          : '終日'}
                       </span>
                     </div>
                   ))}
