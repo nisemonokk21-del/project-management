@@ -8,7 +8,6 @@ import {
   buildWakeEvent,
   buildBedEvent,
   calDisplayName,
-  isSystemCalendar,
   realEvents,
 } from '../services/calendar';
 import { formatTime, formatDate, formatDateTime } from '../utils/timeUtils';
@@ -17,6 +16,7 @@ import { yahooTransitUrl, ORIGIN_STATION } from '../services/transitLinks';
 export default function ProjectResult({ result, onReset }) {
   const { googleToken, reauth } = useAuth();
   const [conflicts, setConflicts] = useState([]);
+  const [checkedCalNames, setCheckedCalNames] = useState([]);
   const [calendarLoading, setCalendarLoading] = useState(false);
   const [calendarChecked, setCalendarChecked] = useState(false);
   const [addLoading, setAddLoading] = useState(false);
@@ -36,9 +36,10 @@ export default function ProjectResult({ result, onReset }) {
     try {
       const token = await getToken();
       if (!token) { setCalError('再ログインが必要です'); return; }
-      // primaryだけでなく、登録済みの全カレンダー（祝日等のシステムカレンダーを除く）を確認する
+      // primaryだけでなく、カレンダーリストにある全カレンダー（除外なし）を確認する
       const calListData = await listCalendars(token);
-      const cals = (calListData.items || []).filter((c) => !isSystemCalendar(c));
+      const cals = calListData.items || [];
+      setCheckedCalNames(cals.map(calDisplayName));
       const dateStr = collectionTime.toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
       const failed = [];
       const perCal = await Promise.all(
@@ -203,6 +204,11 @@ export default function ProjectResult({ result, onReset }) {
               ) : (
                 <p className="ok-text">✅ 当日のカレンダーに被りはありません</p>
               )
+            )}
+            {calendarChecked && checkedCalNames.length > 0 && (
+              <p className="ls-hint" style={{ marginTop: '8px' }}>
+                被りチェック対象カレンダー（{checkedCalNames.length}件）: {checkedCalNames.join('、')}
+              </p>
             )}
 
             <div className="events-preview">
