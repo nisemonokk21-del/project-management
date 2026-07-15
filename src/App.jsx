@@ -39,7 +39,7 @@ export default function App() {
           <LineScheduler />
         </div>
       </main>
-      <footer className="version-footer">v3.7 — 被りチェックを全カレンダー対象に（除外なし）・対象カレンダー一覧を表示</footer>
+      <footer className="version-footer">v3.8 — 当日被りを終日チェックに修正（乗車〜集合限定を廃止）・候補日の年ずれ補正</footer>
     </div>
   );
 }
