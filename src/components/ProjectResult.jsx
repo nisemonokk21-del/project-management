@@ -52,15 +52,14 @@ export default function ProjectResult({ result, onReset }) {
             })
         )
       );
-      // Check overlap with boarding→collection window
-      const windowStart = schedule.boardingTime;
-      const windowEnd = collectionTime;
+      // 「当日の予定」は時間帯を絞らず、その日にあるすべての予定を被りとして扱う。
+      // （以前は乗車→集合の時間帯しか見ておらず、集合より後＝当日の午後の予定が
+      //  カレンダータブには表示されるのに「被りなし」と判定されていた）
       // 終日イベント（date形式）はJSTの0時起点として扱う
-      // （素のnew Date("YYYY-MM-DD")はUTC解釈＝朝9時扱いになり、早朝集合の被りを見落とす）
       const toDate = (v) => (v.dateTime ? new Date(v.dateTime) : new Date(v.date + 'T00:00:00+09:00'));
-      const found = perCal.flat().filter((e) => {
-        return toDate(e.start) < windowEnd && toDate(e.end) > windowStart;
-      });
+      const found = perCal
+        .flat()
+        .sort((a, b) => toDate(a.start) - toDate(b.start));
       setConflicts(found);
       if (failed.length > 0) {
         setCalError(`一部カレンダーの取得に失敗しました（${failed.join('、')}）。被りを見落としている可能性があります。`);

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { parseLineMessage } from '../services/lineParser';
+import { jstDateString } from '../utils/timeUtils';
 import {
   listCalendars,
   getEventsFromCalendar,
@@ -22,6 +23,25 @@ function formatDateJP(dateStr) {
   const [y, m, d] = dateStr.split('-').map(Number);
   const day = WEEKDAYS[new Date(y, m - 1, d).getDay()];
   return `${m}/${d}(${day})`;
+}
+
+// チェック結果用：年も含めて表示する（解析が年を誤った場合に画面で気付けるように）
+function formatDateJPWithYear(dateStr) {
+  const [y] = dateStr.split('-').map(Number);
+  return `${y}/${formatDateJP(dateStr)}`;
+}
+
+// LINE解析が返した候補日の年ずれ対策。
+// 候補日は常に「これから」の日付のはずなので、過去の日付が返ってきたら
+// 年の推測ミスとみなし、今日以降になるまで年を進める（最大2年）。
+// 例: 今日が2026-07-15のとき「2025-07-16」→「2026-07-16」に補正。
+function fixParsedYear(dateStr, todayStr) {
+  let s = dateStr;
+  for (let i = 0; i < 2 && s < todayStr; i++) {
+    const [y, m, d] = s.split('-').map(Number);
+    s = `${y + 1}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  }
+  return s;
 }
 
 // パースした候補日を「7/16(火), 7/17(水)」のような日程文字列にまとめる
@@ -140,7 +160,17 @@ export default function LineScheduler() {
 
       // Step 1: Parse LINE text via Cloud Function → Claude API
       setStatusMsg('LINE文を解析中...');
-      const parsedData = await parseLineMessage(lineText.trim());
+      const rawParsed = await parseLineMessage(lineText.trim());
+      // 解析が年を誤ると存在しない過去日をカレンダー照会して「全日OK」になってしまうため、
+      // 過去日付は年を補正してから使う
+      const todayStr = jstDateString();
+      const parsedData = {
+        ...rawParsed,
+        dates: (rawParsed.dates || []).map((d) => ({
+          ...d,
+          date: fixParsedYear(d.date, todayStr),
+        })),
+      };
       setParsed(parsedData);
       // 案件内容フォームの初期値をパース結果から流し込む（内容は原文ママ）
       setProjectInfo({
@@ -411,7 +441,7 @@ export default function LineScheduler() {
                 >
                   <div className="ls-date-main">
                     <div className="ls-date-label">
-                      <span className="ls-date-text">{formatDateJP(r.date)}</span>
+                      <span className="ls-date-text">{formatDateJPWithYear(r.date)}</span>
                       {r.label && (
                         <span className="ls-candidate-label">{r.label}</span>
                       )}
