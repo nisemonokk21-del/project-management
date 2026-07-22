@@ -39,7 +39,7 @@ export default function App() {
           <LineScheduler />
         </div>
       </main>
-      <footer className="version-footer">v4.1 — Gemini解析モデルをgemini-3.6-flashに更新</footer>
+      <footer className="version-footer">v4.2 — Cloudflare Worker用にwrangler.tomlを追加（static assets誤デプロイの修正）</footer>
     </div>
   );
 }
