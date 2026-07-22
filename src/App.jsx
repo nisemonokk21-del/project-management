@@ -39,7 +39,7 @@ export default function App() {
           <LineScheduler />
         </div>
       </main>
-      <footer className="version-footer">v4.2 — Cloudflare Worker用にwrangler.tomlを追加（static assets誤デプロイの修正）</footer>
+      <footer className="version-footer">v4.3 — Cloudflare Worker Git連携の設定完了（進捗メモ更新）</footer>
     </div>
   );
 }

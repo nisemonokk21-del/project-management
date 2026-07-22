@@ -22,8 +22,8 @@
 
 ## 未完了・残タスク（v3.0を本番で動かすために必要）
 
-- [ ] `cloudflare-worker/` のWorkerを `GEMINI_API_KEY` シークレット付きでデプロイ
-- [ ] デプロイしたWorkerのURLをGitHub Actionsシークレット `VITE_PARSE_LINE_URL` に登録
+- [x] `cloudflare-worker/` にwrangler.tomlを追加し、Cloudflare Git連携（Root directory: `/cloudflare-worker`, Build command: なし, Deploy command: `npx wrangler deploy`）を設定
+- [ ] `GEMINI_API_KEY` シークレットを再設定（static assetsデプロイで一時的に外れていたため）
 - [ ] Worker + シークレット設定後の実機での動作確認（エンドツーエンド）
 
 ## メモ
