@@ -39,7 +39,7 @@ export default function App() {
           <LineScheduler />
         </div>
       </main>
-      <footer className="version-footer">v4.0 — LINE解析APIをClaudeからGeminiに移行（Cloudflare Worker、GEMINI_API_KEY）</footer>
+      <footer className="version-footer">v4.1 — Gemini解析モデルをgemini-3.6-flashに更新</footer>
     </div>
   );
 }
