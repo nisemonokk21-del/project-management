@@ -11,8 +11,8 @@
 - [x] v2.1: 乗車時刻の自動取得（Google Maps JavaScript API）
 - [x] Googleログイン（ポップアップ方式、モバイル対応の調整込み）
 - [x] v3.0: LINE返信自動生成機能（PR #4, #5）
-  - LINEの案件相談文を貼り付け → Claudeで解析 → 候補日をGoogleカレンダーと突き合わせ → 空いている日を「仮撮影」カレンダーに登録 → 返信文を自動生成
-  - Anthropic APIキーはCloudflare Worker側に保持（ブラウザには出さない）
+  - LINEの案件相談文を貼り付け → Geminiで解析 → 候補日をGoogleカレンダーと突き合わせ → 空いている日を「仮撮影」カレンダーに登録 → 返信文を自動生成
+  - Gemini APIキーはCloudflare Worker側に保持（ブラウザには出さない）
   - LINE解析結果の日付フォーマット（文字列 / `{date, label}`オブジェクト）両対応に修正済み（PR #5）
 - [x] LINE返信機能: 仮撮影カレンダーへの登録を自動実行 → 手動確認ボタン方式に変更
   - 解析・被りチェック後は登録せず、内容を確認してから「仮撮影カレンダーに登録する」ボタンで登録する
@@ -22,7 +22,7 @@
 
 ## 未完了・残タスク（v3.0を本番で動かすために必要）
 
-- [ ] `cloudflare-worker/` のWorkerを `ANTHROPIC_API_KEY` シークレット付きでデプロイ
+- [ ] `cloudflare-worker/` のWorkerを `GEMINI_API_KEY` シークレット付きでデプロイ
 - [ ] デプロイしたWorkerのURLをGitHub Actionsシークレット `VITE_PARSE_LINE_URL` に登録
 - [ ] Worker + シークレット設定後の実機での動作確認（エンドツーエンド）
 

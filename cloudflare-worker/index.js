@@ -1,6 +1,6 @@
-// LINE案件相談文を Claude で解析して JSON を返す Cloudflare Worker。
-// Anthropic の API キーはブラウザに出さず、この Worker の環境変数
-// (env.ANTHROPIC_API_KEY) に保管する。ブラウザからは lineText を POST するだけ。
+// LINE案件相談文を Gemini で解析して JSON を返す Cloudflare Worker。
+// Google の API キーはブラウザに出さず、この Worker の環境変数
+// (env.GEMINI_API_KEY) に保管する。ブラウザからは lineText を POST するだけ。
 export default {
   async fetch(request, env) {
     const corsHeaders = {
@@ -46,20 +46,25 @@ export default {
       })
       .replace(/\//g, '-');
 
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 1024,
-        messages: [
-          {
-            role: 'user',
-            content: `以下のLINEメッセージから撮影案件情報を抽出してJSON形式で返してください。今日は${todayJST}（JST）です。
+    const res = await fetch(
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent',
+      {
+        method: 'POST',
+        headers: {
+          'x-goog-api-key': env.GEMINI_API_KEY,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          generationConfig: {
+            maxOutputTokens: 1024,
+            responseMimeType: 'application/json',
+          },
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                {
+                  text: `以下のLINEメッセージから撮影案件情報を抽出してJSON形式で返してください。今日は${todayJST}（JST）です。
 
 メッセージ:
 ${lineText}
@@ -79,10 +84,13 @@ JSON形式（コードブロックなし、マークダウンなし）で返答�
 - 複数の候補日をすべて含めてください
 - datesは日付昇順で並べてください
 - JSONのみ返してください。説明文は不要です`,
-          },
-        ],
-      }),
-    });
+                },
+              ],
+            },
+          ],
+        }),
+      }
+    );
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -93,7 +101,7 @@ JSON形式（コードブロックなし、マークダウンなし）で返答�
     }
 
     const data = await res.json();
-    let text = (data.content?.[0]?.text ?? '').trim();
+    let text = (data.candidates?.[0]?.content?.parts?.[0]?.text ?? '').trim();
     // マークダウンのコードフェンスが付いていたら除去
     text = text.replace(/^```(?:json)?\s*/m, '').replace(/\s*```\s*$/m, '');
 

@@ -98,7 +98,7 @@ export default function LineScheduler() {
       const token = await getToken();
       if (!token) throw new Error('Googleログインが必要です。一度ログアウトして再ログインしてください。');
 
-      // Step 1: Parse LINE text via Cloud Function → Claude API
+      // Step 1: Parse LINE text via Cloud Function → Gemini API
       setStatusMsg('LINE文を解析中...');
       const rawParsed = await parseLineMessage(lineText.trim());
       // 解析が年を誤ると存在しない過去日をカレンダー照会して「全日OK」になってしまうため、

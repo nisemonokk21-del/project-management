@@ -39,7 +39,7 @@ export default function App() {
           <LineScheduler />
         </div>
       </main>
-      <footer className="version-footer">v3.9 — バラシ撮影を被り除外・返信文は撮影案件のみ名前表示/他はNG・返信ロジックにテスト追加</footer>
+      <footer className="version-footer">v4.1 — Gemini解析モデルをgemini-3.6-flashに更新</footer>
     </div>
   );
 }
