@@ -1,8 +1,24 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { listCalendars, getEventsInRange } from '../services/calendar';
+import {
+  listCalendars,
+  getEventsInRange,
+  isTeardownCalendar,
+  isHolidayCalendar,
+} from '../services/calendar';
 
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
+
+// 背景色に対して読みやすい文字色（明るい背景→濃色、暗い背景→白）
+function textOn(hex) {
+  const h = (hex || '').replace('#', '');
+  if (h.length < 6) return '#ffffff';
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return lum > 0.62 ? '#1f2937' : '#ffffff';
+}
 
 // Date → "YYYY-MM-DD"（JST基準）
 function jstDay(date) {
@@ -43,6 +59,9 @@ export default function CalendarView() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [selectedDay, setSelectedDay] = useState(jstDay(now));
+  // バラシ撮影・祝日カレンダーの表示ON/OFF（初期は両方表示）
+  const [showTeardown, setShowTeardown] = useState(true);
+  const [showHolidays, setShowHolidays] = useState(true);
 
   const getToken = async () => {
     if (googleToken) return googleToken;
@@ -67,13 +86,16 @@ export default function CalendarView() {
       const cals = (calListData.items || []).filter((c) => c.selected !== false);
 
       const results = await Promise.all(
-        cals.map((cal) =>
-          getEventsInRange(token, cal.id, start, end)
-            .then((d) =>
-              (d.items || []).map((e) => ({ e, color: cal.backgroundColor || '#4285f4' }))
-            )
-            .catch(() => [])
-        )
+        cals.map((cal) => {
+          const meta = {
+            color: cal.backgroundColor || '#4285f4',
+            teardown: isTeardownCalendar(cal),
+            holiday: isHolidayCalendar(cal),
+          };
+          return getEventsInRange(token, cal.id, start, end)
+            .then((d) => (d.items || []).map((e) => ({ e, ...meta })))
+            .catch(() => []);
+        })
       );
 
       const map = {};
@@ -81,12 +103,12 @@ export default function CalendarView() {
         (map[day] ||= []).push(item);
       };
 
-      results.flat().forEach(({ e, color }) => {
+      results.flat().forEach(({ e, color, teardown, holiday }) => {
         const title = e.summary || '(無題)';
         if (e.start?.date) {
           // 終日イベント
           eachDay(e.start.date, e.end?.date).forEach((day) =>
-            push(day, { title, color, allDay: true, sortKey: '' })
+            push(day, { title, color, teardown, holiday, allDay: true, sortKey: '' })
           );
         } else if (e.start?.dateTime) {
           const dt = new Date(e.start.dateTime);
@@ -96,7 +118,7 @@ export default function CalendarView() {
             minute: '2-digit',
             timeZone: 'Asia/Tokyo',
           });
-          push(day, { title, color, allDay: false, time, sortKey: time });
+          push(day, { title, color, teardown, holiday, allDay: false, time, sortKey: time });
         }
       });
 
@@ -157,8 +179,12 @@ export default function CalendarView() {
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
   while (cells.length % 7 !== 0) cells.push(null);
 
+  // トグルに応じてバラシ撮影・祝日を出し分ける（再取得せず表示だけ切り替え）
+  const visible = (ev) =>
+    (showTeardown || !ev.teardown) && (showHolidays || !ev.holiday);
+
   const todayStr = jstDay(new Date());
-  const selectedEvents = eventsByDay[selectedDay] || [];
+  const selectedEvents = (eventsByDay[selectedDay] || []).filter(visible);
 
   return (
     <div className="cal-wrap">
@@ -170,6 +196,25 @@ export default function CalendarView() {
           </div>
           <button className="cal-nav-btn" onClick={goNext} aria-label="次の月">›</button>
           <button className="cal-today-btn" onClick={goToday}>今日</button>
+        </div>
+
+        <div className="cal-toggles">
+          <label className="cal-toggle">
+            <input
+              type="checkbox"
+              checked={showTeardown}
+              onChange={(e) => setShowTeardown(e.target.checked)}
+            />
+            バラシ撮影
+          </label>
+          <label className="cal-toggle">
+            <input
+              type="checkbox"
+              checked={showHolidays}
+              onChange={(e) => setShowHolidays(e.target.checked)}
+            />
+            祝日
+          </label>
         </div>
 
         {error && <div className="error" style={{ marginBottom: '12px' }}>⚠️ {error}</div>}
@@ -189,7 +234,7 @@ export default function CalendarView() {
           {cells.map((d, i) => {
             if (d === null) return <div key={i} className="cal-cell cal-empty" />;
             const dayStr = fmtLocal(year, month, d);
-            const evs = eventsByDay[dayStr] || [];
+            const evs = (eventsByDay[dayStr] || []).filter(visible);
             const wd = i % 7;
             return (
               <button
@@ -206,9 +251,16 @@ export default function CalendarView() {
                 >
                   {d}
                 </span>
-                <span className="cal-dots">
-                  {evs.slice(0, 4).map((ev, k) => (
-                    <span key={k} className="cal-dot" style={{ background: ev.color }} />
+                <span className="cal-chips">
+                  {evs.map((ev, k) => (
+                    <span
+                      key={k}
+                      className="cal-chip"
+                      style={{ background: ev.color, color: textOn(ev.color) }}
+                      title={ev.title}
+                    >
+                      {ev.title}
+                    </span>
                   ))}
                 </span>
               </button>

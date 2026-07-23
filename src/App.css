@@ -778,6 +778,24 @@ input:focus, select:focus {
 .ls-ok { background: var(--success-light); border-color: #86efac; }
 .ls-ng { background: var(--danger-light); border-color: #fecaca; }
 
+/* 3ステータス（被りOK / NG / 他案件）の候補日カード背景 */
+.ls-st-ok { background: var(--success-light); border-color: #86efac; }
+.ls-st-ng { background: var(--danger-light); border-color: #fecaca; }
+.ls-st-other { background: #fff7ed; border-color: #fed7aa; }
+
+.ls-status-legend {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  background: var(--gray-50);
+  border: 1px solid var(--gray-200);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--gray-600);
+  line-height: 1.7;
+}
+.ls-status-legend b { color: var(--gray-800); }
+
 .ls-date-label { display: flex; align-items: center; gap: 8px; }
 .ls-date-text { font-weight: 700; font-size: 16px; font-variant-numeric: tabular-nums; }
 .ls-candidate-label {
@@ -806,20 +824,61 @@ input:focus, select:focus {
   color: var(--danger);
   line-height: 1.5;
 }
-.ls-toggle-btn {
+/* 3択セグメントボタン（被りOK / NG / 他案件） */
+.ls-seg {
   flex-shrink: 0;
+  display: inline-flex;
+  border: 1.5px solid var(--gray-300);
+  border-radius: 8px;
+  overflow: hidden;
   background: #fff;
-  border: 1.5px solid;
+}
+.ls-seg-btn {
+  background: #fff;
+  border: none;
+  border-left: 1px solid var(--gray-200);
+  padding: 7px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: inherit;
+  color: var(--gray-500);
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.ls-seg-btn:first-child { border-left: none; }
+.ls-seg-btn.active.ls-seg-ok { background: var(--success); color: #fff; }
+.ls-seg-btn.active.ls-seg-ng { background: var(--danger); color: #fff; }
+.ls-seg-btn.active.ls-seg-other { background: #ea580c; color: #fff; }
+
+.ls-reply-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.ls-update-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #fff;
+  color: var(--gray-600);
+  border: 1px solid var(--gray-300);
   border-radius: 8px;
   padding: 7px 14px;
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 600;
   font-family: inherit;
   cursor: pointer;
-  transition: background .15s;
+  transition: background .15s, color .15s, border-color .15s;
 }
-.ls-toggle-btn.ls-t-ok { color: var(--success); border-color: var(--success); }
-.ls-toggle-btn.ls-t-ng { color: var(--danger); border-color: var(--danger); }
+.ls-update-btn:hover { background: var(--gray-100); }
+/* 候補日を変えて未反映のときは目立たせる */
+.ls-update-btn.ls-update-stale {
+  background: #fff7ed;
+  color: #ea580c;
+  border-color: #fdba74;
+  animation: ls-pulse 1.4s ease-in-out infinite;
+}
+@keyframes ls-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(234,88,12,.35); }
+  50% { box-shadow: 0 0 0 4px rgba(234,88,12,0); }
+}
+.ls-stale-hint { color: #ea580c; font-weight: 600; }
 
 .ls-reply-textarea {
   width: 100%;
@@ -932,6 +991,29 @@ input:focus, select:focus {
 }
 .cal-today-btn:hover { background: #dbeafe; }
 
+.cal-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-bottom: 12px;
+}
+.cal-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gray-700);
+  cursor: pointer;
+  user-select: none;
+}
+.cal-toggle input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
 .cal-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
@@ -951,12 +1033,12 @@ input:focus, select:focus {
 .cal-weekday.cal-sat { color: var(--primary); }
 
 .cal-cell {
-  aspect-ratio: 1 / 1;
+  min-height: 78px;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 3px;
-  padding: 4px 2px;
+  align-items: stretch;
+  gap: 2px;
+  padding: 3px 3px 4px;
   border: 1px solid transparent;
   border-radius: 8px;
   background: var(--gray-50);
@@ -971,27 +1053,43 @@ input:focus, select:focus {
 .cal-selected { border-color: var(--primary); }
 
 .cal-day-num {
-  font-size: 14px;
+  align-self: flex-start;
+  font-size: 13px;
   font-weight: 600;
   color: var(--gray-700);
   font-variant-numeric: tabular-nums;
+  padding: 0 2px;
 }
 .cal-day-num.cal-sun { color: var(--danger); }
 .cal-day-num.cal-sat { color: var(--primary); }
 .cal-today .cal-day-num { color: var(--primary); font-weight: 700; }
 
-.cal-dots {
+.cal-chips {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 2px;
-  justify-content: center;
-  max-width: 100%;
+  width: 100%;
+  overflow: hidden;
 }
-.cal-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  flex-shrink: 0;
+.cal-chip {
+  display: block;
+  width: 100%;
+  font-size: 10px;
+  line-height: 1.35;
+  font-weight: 600;
+  padding: 1px 4px;
+  border-radius: 3px;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cal-more {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--gray-500);
+  text-align: left;
+  padding: 0 4px;
 }
 
 .cal-day-events { display: flex; flex-direction: column; gap: 8px; }
@@ -1028,6 +1126,8 @@ input:focus, select:focus {
 
 @media (max-width: 400px) {
   .cal-grid { gap: 2px; }
-  .cal-day-num { font-size: 13px; }
-  .cal-dot { width: 5px; height: 5px; }
+  .cal-cell { min-height: 68px; }
+  .cal-day-num { font-size: 12px; }
+  .cal-chip { font-size: 9px; padding: 1px 3px; }
+  .cal-more { font-size: 9px; padding: 0 3px; }
 }

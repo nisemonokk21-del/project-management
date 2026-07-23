@@ -31,6 +31,16 @@ export const isSystemCalendar = (cal) => (cal.id || '').endsWith('@group.v.calen
 // 被りチェックからはカレンダーごと丸ごと除外する。
 export const TEARDOWN_CALENDAR_NAME = 'バラシ撮影';
 
+// 「バラシ撮影」カレンダー判定（月表示の表示ON/OFF用）
+export const isTeardownCalendar = (cal) =>
+  calDisplayName(cal) === TEARDOWN_CALENDAR_NAME;
+
+// 祝日カレンダー判定（月表示の表示ON/OFF用）。
+// 日本の祝日カレンダーは id が「...#holiday@group.v.calendar.google.com」の形。
+// 名前を自分で変えている場合に備えて「祝日」を含む名前も拾う。
+export const isHolidayCalendar = (cal) =>
+  /holiday/i.test(cal.id || '') || /祝日/.test(calDisplayName(cal) || '');
+
 // 被りチェックの対象にしないカレンダー（表示名で判定）
 const EXCLUDED_CONFLICT_CALENDAR_NAMES = new Set([TEARDOWN_CALENDAR_NAME]);
 

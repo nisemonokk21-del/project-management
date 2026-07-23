@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   fixParsedYear,
+  autoStatus,
   replyLabelFor,
   generateReply,
 } from './scheduleReply.js';
@@ -20,68 +21,100 @@ test('fixParsedYear: 今日以降の日付はそのまま', () => {
   assert.equal(fixParsedYear('2027-03-01', '2026-07-15'), '2027-03-01'); // 未来
 });
 
-// --- replyLabelFor: 返信文の1日ぶんのラベル ---
 const shoot = (summary, cal) => ({ summary, calName: cal });
 
-test('replyLabelFor: OKはそのままOK', () => {
-  assert.equal(replyLabelFor({ include: true, conflicts: [] }), 'OK');
+// --- autoStatus: 被り状況からの初期ステータス自動判定 ---
+test('autoStatus: 被りなしは ok', () => {
+  assert.equal(autoStatus([]), 'ok');
+  assert.equal(autoStatus(undefined), 'ok');
 });
 
-test('replyLabelFor: 仮撮影/決定撮影が被ったら案件名を出す', () => {
+test('autoStatus: 撮影案件が被れば other（他案件）', () => {
+  assert.equal(autoStatus([shoot('A映画', '仮撮影')]), 'other');
+  assert.equal(autoStatus([shoot('B案件', '決定撮影')]), 'other');
+  // 撮影＋個人が混在しても撮影がある限り other
   assert.equal(
-    replyLabelFor({ include: false, conflicts: [shoot('A映画', '仮撮影')] }),
+    autoStatus([shoot('歯医者', 'プライベート'), shoot('A映画', '仮撮影')]),
+    'other'
+  );
+});
+
+test('autoStatus: 個人の予定だけ被れば ng', () => {
+  assert.equal(autoStatus([shoot('歯医者', 'プライベート')]), 'ng');
+});
+
+// --- replyLabelFor: 返信文の1日ぶんのラベル（3ステータス制）---
+test('replyLabelFor: ok は OK', () => {
+  assert.equal(replyLabelFor({ status: 'ok', conflicts: [] }), 'OK');
+  // 個人の予定が被っていても被りOK扱いなら OK（名前は出さない）
+  assert.equal(
+    replyLabelFor({ status: 'ok', conflicts: [shoot('歯医者', 'プライベート')] }),
+    'OK'
+  );
+});
+
+test('replyLabelFor: ng は NG', () => {
+  assert.equal(
+    replyLabelFor({ status: 'ng', conflicts: [shoot('歯医者', 'プライベート')] }),
+    'NG'
+  );
+});
+
+test('replyLabelFor: other は撮影案件名を出す', () => {
+  assert.equal(
+    replyLabelFor({ status: 'other', conflicts: [shoot('A映画', '仮撮影')] }),
     'A映画'
   );
   assert.equal(
-    replyLabelFor({ include: false, conflicts: [shoot('B案件', '決定撮影')] }),
+    replyLabelFor({ status: 'other', conflicts: [shoot('B案件', '決定撮影')] }),
     'B案件'
   );
 });
 
-test('replyLabelFor: 撮影が複数被ったら全部並べる（②）', () => {
+test('replyLabelFor: other で撮影が複数被ったら全部並べる', () => {
   assert.equal(
     replyLabelFor({
-      include: false,
+      status: 'other',
       conflicts: [shoot('A映画', '仮撮影'), shoot('Bドラマ', '決定撮影')],
     }),
     'A映画、Bドラマ'
   );
 });
 
-test('replyLabelFor: 撮影以外だけが被ったらNGとだけ書く（③）', () => {
-  assert.equal(
-    replyLabelFor({ include: false, conflicts: [shoot('歯医者', 'プライベート')] }),
-    'NG'
-  );
-});
-
-test('replyLabelFor: 撮影と個人が両方被ったら撮影案件だけ出す（③）', () => {
+test('replyLabelFor: other で撮影と個人が両方被ったら撮影案件だけ出す', () => {
   assert.equal(
     replyLabelFor({
-      include: false,
+      status: 'other',
       conflicts: [shoot('筋トレ', '筋トレ'), shoot('A映画', '仮撮影')],
     }),
     'A映画'
   );
 });
 
-test('replyLabelFor: 同じ案件名の重複は1つにまとめる', () => {
+test('replyLabelFor: other で同じ案件名の重複は1つにまとめる', () => {
   assert.equal(
     replyLabelFor({
-      include: false,
+      status: 'other',
       conflicts: [shoot('A映画', '仮撮影'), shoot('A映画', '決定撮影')],
     }),
     'A映画'
   );
 });
 
+test('replyLabelFor: other で撮影案件名がなければ被り予定名で代替', () => {
+  assert.equal(
+    replyLabelFor({ status: 'other', conflicts: [shoot('会議', '仕事')] }),
+    '会議'
+  );
+});
+
 // --- generateReply: 連続日のまとめと全体の文面 ---
 test('generateReply: 連続OKはまとめ、NG理由が違えば分ける', () => {
   const reply = generateReply([
-    { date: '2026-07-16', include: true, conflicts: [] },
-    { date: '2026-07-17', include: true, conflicts: [] },
-    { date: '2026-07-18', include: false, conflicts: [shoot('A映画', '仮撮影')] },
-    { date: '2026-07-19', include: false, conflicts: [shoot('歯医者', 'プライベート')] },
+    { date: '2026-07-16', status: 'ok', conflicts: [] },
+    { date: '2026-07-17', status: 'ok', conflicts: [] },
+    { date: '2026-07-18', status: 'other', conflicts: [shoot('A映画', '仮撮影')] },
+    { date: '2026-07-19', status: 'ng', conflicts: [shoot('歯医者', 'プライベート')] },
   ]);
   assert.match(reply, /7\/16,17 OK/);
   assert.match(reply, /7\/18 A映画/);
@@ -90,8 +123,8 @@ test('generateReply: 連続OKはまとめ、NG理由が違えば分ける', () =
 
 test('generateReply: 同ラベルでも日付が飛んでいれば別行にする', () => {
   const reply = generateReply([
-    { date: '2026-07-16', include: true, conflicts: [] },
-    { date: '2026-07-20', include: true, conflicts: [] },
+    { date: '2026-07-16', status: 'ok', conflicts: [] },
+    { date: '2026-07-20', status: 'ok', conflicts: [] },
   ]);
   assert.match(reply, /7\/16 OK/);
   assert.match(reply, /7\/20 OK/);

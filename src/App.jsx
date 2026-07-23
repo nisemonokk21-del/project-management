@@ -39,7 +39,7 @@ export default function App() {
           <LineScheduler />
         </div>
       </main>
-      <footer className="version-footer">v4.3 — Cloudflare Worker Git連携の設定完了（進捗メモ更新）</footer>
+      <footer className="version-footer">v4.6 — 仮撮影登録の対象を「被りOK＋他案件」に変更（NGのみ登録しない）</footer>
     </div>
   );
 }
