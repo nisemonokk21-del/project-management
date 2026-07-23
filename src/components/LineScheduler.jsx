@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { parseLineMessage } from '../services/lineParser';
 import { jstDateString } from '../utils/timeUtils';
-import { fixParsedYear, generateReply } from '../services/scheduleReply';
+import { fixParsedYear, generateReply, autoStatus } from '../services/scheduleReply';
 import {
   listCalendars,
   getEventsFromCalendar,
@@ -59,6 +59,8 @@ export default function LineScheduler() {
   const [checkedCalNames, setCheckedCalNames] = useState([]);
   const [failedCalNames, setFailedCalNames] = useState([]);
   const [replyText, setReplyText] = useState('');
+  // 候補日のOK/NG/他案件を変えると true。返信文が古いことを示し、まとめて更新する。
+  const [replyStale, setReplyStale] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
@@ -80,6 +82,7 @@ export default function LineScheduler() {
     setProjectInfo({ name: '', schedule: '', location: '', content: '' });
     setDateResults([]);
     setReplyText('');
+    setReplyStale(false);
     setCopied(false);
     setDone(false);
     setProvisionalCal(null);
@@ -158,10 +161,10 @@ export default function LineScheduler() {
           const conflicts = checks.flat();
           return {
             ...dateInfo,
-            status: conflicts.length > 0 ? 'ng' : 'ok',
             conflicts,
-            // include = ユーザーの最終判断（初期値は自動判定、ボタンで手動切替できる）
-            include: conflicts.length === 0,
+            // status = ユーザーの最終判断（3択: 'ok'=被りOK / 'ng' / 'other'=他案件）。
+            // 初期値は被り状況から自動判定し、ボタンで手動切替できる。
+            status: autoStatus(conflicts),
           };
         })
       );
@@ -171,6 +174,7 @@ export default function LineScheduler() {
       // Step 4: Generate reply text (calendar registration now happens on manual confirmation)
       setDateResults(results);
       setReplyText(generateReply(results));
+      setReplyStale(false);
       setDone(true);
     } catch (err) {
       setError(err.message ?? '処理に失敗しました');
@@ -180,13 +184,22 @@ export default function LineScheduler() {
     }
   };
 
-  // OK/NG の手動切替。返信文の下書きも作り直す
-  const toggleDate = (idx) => {
-    const next = dateResults.map((r, i) => (i === idx ? { ...r, include: !r.include } : r));
-    setDateResults(next);
-    setReplyText(generateReply(next));
+  // 候補日の3択（被りOK / NG / 他案件）を手動で設定する。
+  // 返信文はここでは作り直さない（切替のたびに再生成すると重いため）。
+  // 代わりに「古い」フラグを立て、「返信文を更新」ボタンでまとめて反映する。
+  const setDateStatus = (idx, status) => {
+    setDateResults((prev) =>
+      prev.map((r, i) => (i === idx ? { ...r, status } : r))
+    );
+    setReplyStale(true);
     setRegistered(false);
     setRegisterError('');
+  };
+
+  // 現在の候補日の状態から返信文をまとめて作り直す
+  const regenerateReply = () => {
+    setReplyText(generateReply(dateResults));
+    setReplyStale(false);
   };
 
   const handleRegister = async () => {
@@ -197,7 +210,7 @@ export default function LineScheduler() {
       const token = await getToken();
       if (!token) throw new Error('Googleログインが必要です。一度ログアウトして再ログインしてください。');
 
-      const okDates = dateResults.filter((r) => r.include);
+      const okDates = dateResults.filter((r) => r.status === 'ok');
       // 案件内容フォームで編集した内容をそのままカレンダーに反映する
       const name = projectInfo.name.trim() || parsed?.clientName || '案件';
       const location = projectInfo.location.trim();
@@ -241,6 +254,7 @@ export default function LineScheduler() {
     setCheckedCalNames([]);
     setFailedCalNames([]);
     setReplyText('');
+    setReplyStale(false);
     setCopied(false);
     setDone(false);
     setRegistering(false);
@@ -248,7 +262,7 @@ export default function LineScheduler() {
     setRegisterError('');
   };
 
-  const okCount = dateResults.filter((r) => r.include).length;
+  const okCount = dateResults.filter((r) => r.status === 'ok').length;
 
   return (
     <div className="line-scheduler">
@@ -376,12 +390,20 @@ export default function LineScheduler() {
             {checkedCalNames.length > 0 && (
               <p className="ls-hint">被りチェック対象カレンダー: {checkedCalNames.join('、')}</p>
             )}
-            <p className="ls-hint">ボタンでOK/NGを切り替えられます（返信文の下書きも自動で更新されます）</p>
+            <p className="ls-hint">
+              各日を「被りOK / NG / 他案件」から選べます。切り替えたあと、下の
+              返信文カードの「返信文を更新」でまとめて反映してください。
+            </p>
+            <ul className="ls-status-legend">
+              <li><b>被りOK</b>：個人予定があっても被りなしとして返信（OK）</li>
+              <li><b>NG</b>：個人的な用事などでNG（返信は「NG」だけ）</li>
+              <li><b>他案件</b>：他の案件と被り。案件名を返信に入れる</li>
+            </ul>
             <div className="ls-date-list">
               {dateResults.map((r, i) => (
                 <div
                   key={i}
-                  className={`ls-date-item ${r.include ? 'ls-ok' : 'ls-ng'}`}
+                  className={`ls-date-item ls-st-${r.status}`}
                 >
                   <div className="ls-date-main">
                     <div className="ls-date-label">
@@ -400,12 +422,26 @@ export default function LineScheduler() {
                       </div>
                     )}
                   </div>
-                  <button
-                    className={`ls-toggle-btn ${r.include ? 'ls-t-ok' : 'ls-t-ng'}`}
-                    onClick={() => toggleDate(i)}
-                  >
-                    {r.include ? '✅ OK' : '❌ NG'}
-                  </button>
+                  <div className="ls-seg" role="group" aria-label="この日の扱い">
+                    <button
+                      className={`ls-seg-btn ls-seg-ok${r.status === 'ok' ? ' active' : ''}`}
+                      onClick={() => setDateStatus(i, 'ok')}
+                    >
+                      被りOK
+                    </button>
+                    <button
+                      className={`ls-seg-btn ls-seg-ng${r.status === 'ng' ? ' active' : ''}`}
+                      onClick={() => setDateStatus(i, 'ng')}
+                    >
+                      NG
+                    </button>
+                    <button
+                      className={`ls-seg-btn ls-seg-other${r.status === 'other' ? ' active' : ''}`}
+                      onClick={() => setDateStatus(i, 'other')}
+                    >
+                      他案件
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -436,14 +472,30 @@ export default function LineScheduler() {
           <div className="card">
             <div className="ls-reply-header">
               <h3 style={{ margin: 0 }}>💬 返信文（下書き）</h3>
-              <button
-                className={`ls-copy-btn${copied ? ' ls-copied' : ''}`}
-                onClick={handleCopy}
-              >
-                {copied ? '✓ コピー済み' : '📋 コピー'}
-              </button>
+              <div className="ls-reply-actions">
+                <button
+                  className={`ls-update-btn${replyStale ? ' ls-update-stale' : ''}`}
+                  onClick={regenerateReply}
+                >
+                  🔄 返信文を更新
+                </button>
+                <button
+                  className={`ls-copy-btn${copied ? ' ls-copied' : ''}`}
+                  onClick={handleCopy}
+                >
+                  {copied ? '✓ コピー済み' : '📋 コピー'}
+                </button>
+              </div>
             </div>
-            <p className="ls-hint">自由に編集できます。OK/NGを切り替えると下書きは作り直されます。</p>
+            {replyStale ? (
+              <p className="ls-hint ls-stale-hint">
+                ⚠️ 候補日の設定を変えました。「返信文を更新」で最新の内容に反映してください。
+              </p>
+            ) : (
+              <p className="ls-hint">
+                自由に編集できます。候補日を変えたら「返信文を更新」でまとめて反映されます。
+              </p>
+            )}
             <textarea
               className="ls-reply-textarea"
               value={replyText}

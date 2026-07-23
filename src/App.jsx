@@ -39,7 +39,7 @@ export default function App() {
           <LineScheduler />
         </div>
       </main>
-      <footer className="version-footer">v4.4 — カレンダーの月表示を予定名バー表示に変更（一目で内容が分かるように）</footer>
+      <footer className="version-footer">v4.5 — 候補日を被りOK/NG/他案件の3択化＋返信まとめ更新、カレンダーは全予定表示＆バラシ/祝日トグル</footer>
     </div>
   );
 }
