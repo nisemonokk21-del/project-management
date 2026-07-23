@@ -39,7 +39,7 @@ export default function App() {
           <LineScheduler />
         </div>
       </main>
-      <footer className="version-footer">v4.5 — 候補日を被りOK/NG/他案件の3択化＋返信まとめ更新、カレンダーは全予定表示＆バラシ/祝日トグル</footer>
+      <footer className="version-footer">v4.6 — 仮撮影登録の対象を「被りOK＋他案件」に変更（NGのみ登録しない）</footer>
     </div>
   );
 }

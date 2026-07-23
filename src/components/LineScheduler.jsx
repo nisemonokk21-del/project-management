@@ -210,7 +210,8 @@ export default function LineScheduler() {
       const token = await getToken();
       if (!token) throw new Error('Googleログインが必要です。一度ログアウトして再ログインしてください。');
 
-      const okDates = dateResults.filter((r) => r.status === 'ok');
+      // 登録対象は「被りOK」と「他案件」。NGだけ登録しない。
+      const okDates = dateResults.filter((r) => r.status !== 'ng');
       // 案件内容フォームで編集した内容をそのままカレンダーに反映する
       const name = projectInfo.name.trim() || parsed?.clientName || '案件';
       const location = projectInfo.location.trim();
@@ -262,7 +263,8 @@ export default function LineScheduler() {
     setRegisterError('');
   };
 
-  const okCount = dateResults.filter((r) => r.status === 'ok').length;
+  // 登録件数（被りOK＋他案件、NG以外）
+  const okCount = dateResults.filter((r) => r.status !== 'ng').length;
 
   return (
     <div className="line-scheduler">
