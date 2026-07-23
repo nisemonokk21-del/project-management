@@ -39,7 +39,7 @@ export default function App() {
           <LineScheduler />
         </div>
       </main>
-      <footer className="version-footer">v4.3 — Cloudflare Worker Git連携の設定完了（進捗メモ更新）</footer>
+      <footer className="version-footer">v4.4 — カレンダーの月表示を予定名バー表示に変更（一目で内容が分かるように）</footer>
     </div>
   );
 }

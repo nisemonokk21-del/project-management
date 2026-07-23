@@ -4,6 +4,17 @@ import { listCalendars, getEventsInRange } from '../services/calendar';
 
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
 
+// 背景色に対して読みやすい文字色（明るい背景→濃色、暗い背景→白）
+function textOn(hex) {
+  const h = (hex || '').replace('#', '');
+  if (h.length < 6) return '#ffffff';
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return lum > 0.62 ? '#1f2937' : '#ffffff';
+}
+
 // Date → "YYYY-MM-DD"（JST基準）
 function jstDay(date) {
   return date.toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
@@ -206,10 +217,20 @@ export default function CalendarView() {
                 >
                   {d}
                 </span>
-                <span className="cal-dots">
-                  {evs.slice(0, 4).map((ev, k) => (
-                    <span key={k} className="cal-dot" style={{ background: ev.color }} />
+                <span className="cal-chips">
+                  {evs.slice(0, 3).map((ev, k) => (
+                    <span
+                      key={k}
+                      className="cal-chip"
+                      style={{ background: ev.color, color: textOn(ev.color) }}
+                      title={ev.title}
+                    >
+                      {ev.title}
+                    </span>
                   ))}
+                  {evs.length > 3 && (
+                    <span className="cal-more">+{evs.length - 3}</span>
+                  )}
                 </span>
               </button>
             );
