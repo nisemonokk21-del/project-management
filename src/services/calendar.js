@@ -27,13 +27,14 @@ export const calDisplayName = (cal) => cal.summaryOverride || cal.summary;
 // @group.calendar.google.com で「.v」が入らない）ため区別できる。
 export const isSystemCalendar = (cal) => (cal.id || '').endsWith('@group.v.calendar.google.com');
 
-// 「バラシ撮影」カレンダーは撮影後の記録用で実際の予定ではないため、
-// 被りチェックからはカレンダーごと丸ごと除外する。
-export const TEARDOWN_CALENDAR_NAME = 'バラシ撮影';
-
-// 「バラシ撮影」カレンダー判定（月表示の表示ON/OFF用）
+// 「バラシ」カレンダー（kei.imagawa.a アカウント内の、名前に「バラシ」を含む
+// カレンダー）はバラシ用で本番の予定ではないため、カレンダーごと丸ごと被り
+// チェックから除外する（＝月表示の「バラシ」トグル対象でもある）。
+// 判定は表示名（自分でリネームしている場合は summaryOverride を優先）に
+// 「バラシ」を含むか。※アカウント全体ではなく、この名前のカレンダーだけが対象。
+export const TEARDOWN_CALENDAR_NAME = 'バラシ';
 export const isTeardownCalendar = (cal) =>
-  calDisplayName(cal) === TEARDOWN_CALENDAR_NAME;
+  (calDisplayName(cal) || '').includes(TEARDOWN_CALENDAR_NAME);
 
 // 祝日カレンダー判定（月表示の表示ON/OFF用）。
 // 日本の祝日カレンダーは id が「...#holiday@group.v.calendar.google.com」の形。
@@ -41,16 +42,12 @@ export const isTeardownCalendar = (cal) =>
 export const isHolidayCalendar = (cal) =>
   /holiday/i.test(cal.id || '') || /祝日/.test(calDisplayName(cal) || '');
 
-// 被りチェックの対象にしないカレンダー（表示名で判定）
-const EXCLUDED_CONFLICT_CALENDAR_NAMES = new Set([TEARDOWN_CALENDAR_NAME]);
-
 // 被りチェック対象のカレンダーだけに絞り込む。
+// バラシ撮影（kei.imagawa.a）はカレンダーごと除外する。
 // 祝日等のシステムカレンダーはあえて除外しない（共有カレンダーを取りこぼさないため。
 // 過去にallowlist方式で共有カレンダーを見落として被りが出なかった経緯がある）。
 export function conflictCalendars(cals) {
-  return (cals || []).filter(
-    (c) => !EXCLUDED_CONFLICT_CALENDAR_NAMES.has(calDisplayName(c))
-  );
+  return (cals || []).filter((c) => !isTeardownCalendar(c));
 }
 
 // 被り判定にかける実予定だけを残す（キャンセル済みを除外）
