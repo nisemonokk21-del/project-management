@@ -39,7 +39,7 @@ export default function App() {
           <LineScheduler />
         </div>
       </main>
-      <footer className="version-footer">v4.6 — 仮撮影登録の対象を「被りOK＋他案件」に変更（NGのみ登録しない）</footer>
+      <footer className="version-footer">v4.7 — バラシ判定をkei.imagawa.aの「バラシ」カレンダーに対応（被りチェック除外＆表示トグル）</footer>
     </div>
   );
 }

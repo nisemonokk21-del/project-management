@@ -205,7 +205,7 @@ export default function CalendarView() {
               checked={showTeardown}
               onChange={(e) => setShowTeardown(e.target.checked)}
             />
-            バラシ撮影
+            バラシ
           </label>
           <label className="cal-toggle">
             <input
