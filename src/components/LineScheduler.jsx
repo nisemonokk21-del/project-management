@@ -2,7 +2,14 @@ import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { parseLineMessage } from '../services/lineParser';
 import { jstDateString } from '../utils/timeUtils';
-import { fixParsedYear, generateReply, autoStatus } from '../services/scheduleReply';
+import {
+  fixParsedYear,
+  generateReply,
+  initItemOk,
+  isShootConflict,
+  dayStatus,
+  replyLabelFor,
+} from '../services/scheduleReply';
 import {
   listCalendars,
   getEventsFromCalendar,
@@ -161,9 +168,10 @@ export default function LineScheduler() {
           return {
             ...dateInfo,
             conflicts,
-            // status = ユーザーの最終判断（3択: 'ok'=被りOK / 'ng' / 'other'=他案件）。
-            // 初期値は被り状況から自動判定し、ボタンで手動切替できる。
-            status: autoStatus(conflicts),
+            // itemOk: 各被りのOK/NG（conflicts と同じ並び。撮影案件=true、個人予定=既定NG）
+            itemOk: initItemOk(conflicts),
+            // dayNg: 個人予定の被りが無い日（空き/撮影のみ）を日単位でNGにする時に使う
+            dayNg: false,
           };
         })
       );
@@ -183,12 +191,25 @@ export default function LineScheduler() {
     }
   };
 
-  // 候補日の3択（被りOK / NG / 他案件）を手動で設定する。
-  // 返信文はここでは作り直さない（切替のたびに再生成すると重いため）。
-  // 代わりに「古い」フラグを立て、「返信文を更新」ボタンでまとめて反映する。
-  const setDateStatus = (idx, status) => {
+  // 被っている予定1件ずつのOK/NGを設定する。
+  // 返信文はここでは作り直さない（切替のたびの再生成は重いため）。「返信文を更新」でまとめて反映。
+  const setItemOk = (dateIdx, itemIdx, ok) => {
     setDateResults((prev) =>
-      prev.map((r, i) => (i === idx ? { ...r, status } : r))
+      prev.map((r, i) =>
+        i === dateIdx
+          ? { ...r, itemOk: r.itemOk.map((v, k) => (k === itemIdx ? ok : v)) }
+          : r
+      )
+    );
+    setReplyStale(true);
+    setRegistered(false);
+    setRegisterError('');
+  };
+
+  // 個人予定の被りが無い日（空き/撮影のみ）を日単位でOK/NGする。
+  const setDayNg = (dateIdx, ng) => {
+    setDateResults((prev) =>
+      prev.map((r, i) => (i === dateIdx ? { ...r, dayNg: ng } : r))
     );
     setReplyStale(true);
     setRegistered(false);
@@ -209,8 +230,8 @@ export default function LineScheduler() {
       const token = await getToken();
       if (!token) throw new Error('Googleログインが必要です。一度ログアウトして再ログインしてください。');
 
-      // 登録対象は「被りOK」と「他案件」。NGだけ登録しない。
-      const okDates = dateResults.filter((r) => r.status !== 'ng');
+      // 登録対象はNG以外の日（OK・他案件）。NGの日だけ登録しない。
+      const okDates = dateResults.filter((r) => dayStatus(r) !== 'ng');
       // 案件内容フォームで編集した内容をそのままカレンダーに反映する
       const name = projectInfo.name.trim() || parsed?.clientName || '案件';
       const location = projectInfo.location.trim();
@@ -262,8 +283,8 @@ export default function LineScheduler() {
     setRegisterError('');
   };
 
-  // 登録件数（被りOK＋他案件、NG以外）
-  const okCount = dateResults.filter((r) => r.status !== 'ng').length;
+  // 登録件数（NG以外の日）
+  const okCount = dateResults.filter((r) => dayStatus(r) !== 'ng').length;
 
   return (
     <div className="line-scheduler">
@@ -391,60 +412,91 @@ export default function LineScheduler() {
             {checkedCalNames.length > 0 && (
               <p className="ls-hint">被りチェック対象カレンダー: {checkedCalNames.join('、')}</p>
             )}
-            <p className="ls-hint">
-              各日を「被りOK / NG / 他案件」から選べます。切り替えたあと、下の
-              返信文カードの「返信文を更新」でまとめて反映してください。
-            </p>
             <ul className="ls-status-legend">
-              <li><b>被りOK</b>：個人予定があっても被りなしとして返信（OK）</li>
-              <li><b>NG</b>：個人的な用事などでNG（返信は「NG」だけ）</li>
-              <li><b>他案件</b>：他の案件と被り。案件名を返信に入れる</li>
+              <li>撮影案件（仮撮影/決定撮影）の被り … そのまま案件名を返信に載せます（判断不要）</li>
+              <li>それ以外の予定の被り … 1件ずつ <b>OK/NG</b> を選びます</li>
+              <li>その日に <b>1件でもNG</b> があれば、その日は「NG」で返信します</li>
             </ul>
+            <p className="ls-hint">
+              変更したあと、下の返信文カードの「返信文を更新」でまとめて反映してください。
+            </p>
             <div className="ls-date-list">
-              {dateResults.map((r, i) => (
-                <div
-                  key={i}
-                  className={`ls-date-item ls-st-${r.status}`}
-                >
-                  <div className="ls-date-main">
-                    <div className="ls-date-label">
-                      <span className="ls-date-text">{formatDateJPWithYear(r.date)}</span>
-                      {r.label && (
-                        <span className="ls-candidate-label">{r.label}</span>
+              {dateResults.map((r, i) => {
+                const st = dayStatus(r);
+                const shootNames = (r.conflicts || [])
+                  .filter(isShootConflict)
+                  .map((c) => c.summary)
+                  .filter(Boolean);
+                const nonShoot = (r.conflicts || [])
+                  .map((c, idx) => ({ c, idx }))
+                  .filter((x) => !isShootConflict(x.c));
+                return (
+                  <div key={i} className={`ls-date-item ls-st-${st}`}>
+                    <div className="ls-date-main">
+                      <div className="ls-date-label">
+                        <span className="ls-date-text">{formatDateJPWithYear(r.date)}</span>
+                        {r.label && (
+                          <span className="ls-candidate-label">{r.label}</span>
+                        )}
+                        <span className={`ls-day-result ls-dr-${st}`}>
+                          → {replyLabelFor(r)}
+                        </span>
+                      </div>
+
+                      {shootNames.length > 0 && (
+                        <div className="ls-shoot-note">
+                          🎬 案件の被り（返信に記載）: {shootNames.join(' / ')}
+                        </div>
+                      )}
+
+                      {nonShoot.length > 0 ? (
+                        <div className="ls-conflict-items">
+                          {nonShoot.map(({ c, idx }) => {
+                            const ok = r.itemOk[idx] === true;
+                            return (
+                              <div key={idx} className="ls-conflict-item">
+                                <span className="ls-conflict-name">
+                                  {c.summary || '他の予定'}
+                                </span>
+                                <div className="ls-seg" role="group" aria-label="この予定の扱い">
+                                  <button
+                                    className={`ls-seg-btn ls-seg-ok${ok ? ' active' : ''}`}
+                                    onClick={() => setItemOk(i, idx, true)}
+                                  >
+                                    OK
+                                  </button>
+                                  <button
+                                    className={`ls-seg-btn ls-seg-ng${!ok ? ' active' : ''}`}
+                                    onClick={() => setItemOk(i, idx, false)}
+                                  >
+                                    NG
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        // 個人予定の被りが無い日（空き / 撮影のみ）は日単位でOK/NG
+                        <div className="ls-seg ls-seg-day" role="group" aria-label="この日の扱い">
+                          <button
+                            className={`ls-seg-btn ls-seg-ok${!r.dayNg ? ' active' : ''}`}
+                            onClick={() => setDayNg(i, false)}
+                          >
+                            OK
+                          </button>
+                          <button
+                            className={`ls-seg-btn ls-seg-ng${r.dayNg ? ' active' : ''}`}
+                            onClick={() => setDayNg(i, true)}
+                          >
+                            NG
+                          </button>
+                        </div>
                       )}
                     </div>
-                    {r.conflicts.length > 0 && (
-                      <div className="ls-conflict-list">
-                        ⚠️{' '}
-                        {r.conflicts
-                          .map((c) => c.summary)
-                          .filter(Boolean)
-                          .join(' / ') || '他の予定あり'}
-                      </div>
-                    )}
                   </div>
-                  <div className="ls-seg" role="group" aria-label="この日の扱い">
-                    <button
-                      className={`ls-seg-btn ls-seg-ok${r.status === 'ok' ? ' active' : ''}`}
-                      onClick={() => setDateStatus(i, 'ok')}
-                    >
-                      被りOK
-                    </button>
-                    <button
-                      className={`ls-seg-btn ls-seg-ng${r.status === 'ng' ? ' active' : ''}`}
-                      onClick={() => setDateStatus(i, 'ng')}
-                    >
-                      NG
-                    </button>
-                    <button
-                      className={`ls-seg-btn ls-seg-other${r.status === 'other' ? ' active' : ''}`}
-                      onClick={() => setDateStatus(i, 'other')}
-                    >
-                      他案件
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             {okCount > 0 && provisionalCal && (
