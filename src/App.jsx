@@ -39,7 +39,7 @@ export default function App() {
           <LineScheduler />
         </div>
       </main>
-      <footer className="version-footer">v4.7 — バラシ判定をkei.imagawa.aの「バラシ」カレンダーに対応（被りチェック除外＆表示トグル）</footer>
+      <footer className="version-footer">v4.8 — カレンダー用トークンを保存し、開き直しても再ログイン不要に（ログイン済みなのに再ログインを促される問題を修正）</footer>
     </div>
   );
 }

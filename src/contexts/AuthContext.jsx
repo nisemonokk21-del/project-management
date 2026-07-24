@@ -9,10 +9,59 @@ import {
 
 const AuthContext = createContext(null);
 
+// Googleカレンダー用アクセストークンの保存キーと有効期限。
+// Firebaseのログイン自体はブラウザに永続化されるが、カレンダーAPIを叩く
+// アクセストークンは signInWithPopup の結果にしか含まれず、メモリに置くと
+// ページを開き直すたびに消えて「ログイン済みなのに再ログインを促される」
+// 状態になっていた。そこでトークンをブラウザに保存して復元する。
+// アクセストークンは約1時間で失効するため、少し早め（55分）で失効扱いにする。
+const TOKEN_KEY = 'googleCalendarToken';
+const TOKEN_TTL_MS = 55 * 60 * 1000;
+
+function loadStoredToken() {
+  try {
+    const raw = localStorage.getItem(TOKEN_KEY);
+    if (!raw) return null;
+    const { token, exp } = JSON.parse(raw);
+    if (token && exp && Date.now() < exp) return token;
+    localStorage.removeItem(TOKEN_KEY); // 失効済みは掃除
+  } catch {
+    // localStorage が使えない/壊れている場合は無視
+  }
+  return null;
+}
+
+function saveStoredToken(token) {
+  try {
+    localStorage.setItem(
+      TOKEN_KEY,
+      JSON.stringify({ token, exp: Date.now() + TOKEN_TTL_MS })
+    );
+  } catch {
+    // 保存できなくても致命的ではない
+  }
+}
+
+function clearStoredToken() {
+  try {
+    localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    // ignore
+  }
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [googleToken, setGoogleToken] = useState(null);
+  // 保存済みトークンがあれば初期値として復元する（開き直しても再ログイン不要にする）
+  const [googleToken, setGoogleTokenState] = useState(() => loadStoredToken());
   const [loading, setLoading] = useState(true);
+
+  // トークンの更新は必ずブラウザ保存とセットで行う
+  const setGoogleToken = (token) => {
+    setGoogleTokenState(token);
+    if (token) saveStoredToken(token);
+    else clearStoredToken();
+  };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
