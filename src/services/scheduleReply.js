@@ -42,31 +42,60 @@ function allConflictNames(dateResult) {
   ];
 }
 
-// 候補日の初期ステータスを被り状況から自動判定する。
-// - 被りなし                → 'ok'（被りOK。返信は「OK」）
-// - 撮影案件（仮撮影/決定撮影）が被る → 'other'（他案件。返信に案件名を出す）
-// - それ以外（個人の予定など）だけ被る → 'ng'（返信は「NG」）
-// ユーザーはこの初期値をボタンで3択に切り替えられる。
-export function autoStatus(conflicts) {
-  if (!conflicts || conflicts.length === 0) return 'ok';
-  const hasShoot = conflicts.some((c) => SHOOT_CALENDAR_NAMES.has(c.calName));
-  return hasShoot ? 'other' : 'ng';
+// 撮影案件（仮撮影/決定撮影）の被りかどうか。
+// 撮影案件の被りは「そのまま案件名を返信に載せる」対象で、OK/NG判断は不要。
+export function isShootConflict(conflict) {
+  return SHOOT_CALENDAR_NAMES.has(conflict?.calName);
 }
 
-// 1日ぶんの返信ラベルを決める（3ステータス制）。
-// - 'ok'（被りOK）   → 'OK'（個人の予定があっても被りなしとして返信）
-// - 'ng'             → 'NG'（何と被ったかは返信文に出さない）
-// - 'other'（他案件） → 被っている案件名を並べる。撮影案件名がなければ被り予定名で代替
+// 候補日ごとの初期の「各被りのOK/NG」状態を作る。
+// conflicts と同じ並びの boolean 配列（true=OK/含める、false=NG）。
+// - 撮影案件の被り     → true（そのまま案件名を載せる）
+// - それ以外（個人など）→ false（既定はNG。ユーザーが1件ずつOKに切り替える）
+export function initItemOk(conflicts) {
+  return (conflicts || []).map((c) => isShootConflict(c));
+}
+
+// 候補日1日ぶんの判定。個別のOK/NG（itemOk）と日単位のNG（dayNg）から
+// 'ok' | 'ng' | 'other' を返す。
+// ルール:
+// - 撮影案件以外の被りが1件でもNGなら、その日は 'ng'
+// - 撮影案件以外の被りが無い日は、dayNg が立っていれば 'ng'
+// - 上記でNGにならず、撮影案件の被りがあれば 'other'（案件名を載せる）
+// - どれにも当たらなければ 'ok'
+export function dayStatus(dateResult) {
+  const conflicts = dateResult.conflicts || [];
+  const itemOk = dateResult.itemOk || [];
+  const hasShoot = shootConflictNames(dateResult).length > 0;
+
+  const nonShootIdx = conflicts
+    .map((_, i) => i)
+    .filter((i) => !isShootConflict(conflicts[i]));
+
+  if (nonShootIdx.length === 0) {
+    if (dateResult.dayNg) return 'ng';
+    return hasShoot ? 'other' : 'ok';
+  }
+
+  // 個人予定などの被りが1件でもNG（itemOk が true 以外）なら、その日はNG
+  const anyNg = nonShootIdx.some((i) => itemOk[i] !== true);
+  if (anyNg) return 'ng';
+  return hasShoot ? 'other' : 'ok';
+}
+
+// 1日ぶんの返信ラベルを決める。
+// - 'ng'    → 'NG'（何と被ったかは返信文に出さない）
+// - 'other' → 被っている撮影案件名を並べる。撮影案件名がなければ被り予定名で代替
+// - 'ok'    → 'OK'
 export function replyLabelFor(dateResult) {
-  const status = dateResult.status;
-  if (status === 'ng') return 'NG';
-  if (status === 'other') {
+  const st = dayStatus(dateResult);
+  if (st === 'ng') return 'NG';
+  if (st === 'other') {
     const names = shootConflictNames(dateResult);
     if (names.length > 0) return names.join('、');
     const all = allConflictNames(dateResult);
     return all.length > 0 ? all.join('、') : '他案件';
   }
-  // 'ok'（未設定含む）
   return 'OK';
 }
 

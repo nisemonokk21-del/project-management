@@ -39,7 +39,7 @@ export default function App() {
           <LineScheduler />
         </div>
       </main>
-      <footer className="version-footer">v4.8 — カレンダー用トークンを保存し、開き直しても再ログイン不要に（ログイン済みなのに再ログインを促される問題を修正）</footer>
+      <footer className="version-footer">v4.9 — 候補日チェックを被り1件ずつのOK/NG判断に変更（1件でもNGならその日はNG）</footer>
     </div>
   );
 }
