@@ -11,7 +11,8 @@ import './App.css';
 
 export default function App() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState('project');
+  // 起動時は先頭タブ（カレンダー＋LINE返信）を開く
+  const [activeTab, setActiveTab] = useState('calendar');
   const [result, setResult] = useState(null);
 
   if (!user) return <Login />;
@@ -39,7 +40,7 @@ export default function App() {
           <LineScheduler />
         </div>
       </main>
-      <footer className="version-footer">v5.2 — カレンダーとLINE返信を1つのタブに統合（カレンダーの下で返信生成）</footer>
+      <footer className="version-footer">v5.3 — カレンダータブを一番左にし、起動時に表示するタブに変更</footer>
     </div>
   );
 }
