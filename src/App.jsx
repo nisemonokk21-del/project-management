@@ -39,7 +39,7 @@ export default function App() {
           <LineScheduler />
         </div>
       </main>
-      <footer className="version-footer">v4.9 — 候補日チェックを被り1件ずつのOK/NG判断に変更（1件でもNGならその日はNG）</footer>
+      <footer className="version-footer">v5.0 — カレンダーを画面端まで拡張し余白・隙間を排除、予定名の文字を拡大して読めるように</footer>
     </div>
   );
 }

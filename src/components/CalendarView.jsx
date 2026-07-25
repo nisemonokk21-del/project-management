@@ -188,7 +188,7 @@ export default function CalendarView() {
 
   return (
     <div className="cal-wrap">
-      <div className="card">
+      <div className="cal-panel">
         <div className="cal-header">
           <button className="cal-nav-btn" onClick={goPrev} aria-label="前の月">‹</button>
           <div className="cal-title">
@@ -217,7 +217,7 @@ export default function CalendarView() {
           </label>
         </div>
 
-        {error && <div className="error" style={{ marginBottom: '12px' }}>⚠️ {error}</div>}
+        {error && <div className="error cal-error">⚠️ {error}</div>}
 
         <div className="cal-grid cal-weekdays">
           {WEEKDAYS.map((w, i) => (
