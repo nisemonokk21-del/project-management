@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import {
   listCalendars,
@@ -6,6 +6,12 @@ import {
   isTeardownCalendar,
   isHolidayCalendar,
 } from '../services/calendar';
+import {
+  prevDay,
+  expandDays,
+  weekSegments,
+  laneCount,
+} from '../services/calendarLayout';
 
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
 
@@ -30,36 +36,18 @@ function fmtLocal(y, m0, d) {
   return `${y}-${String(m0 + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 }
 
-// 終日イベント: start.date 〜 end.date(排他的) の各日を列挙
-function eachDay(startStr, endStrExclusive) {
-  const [sy, sm, sd] = startStr.split('-').map(Number);
-  let cur = Date.UTC(sy, sm - 1, sd);
-  let endT;
-  if (endStrExclusive) {
-    const [ey, em, ed] = endStrExclusive.split('-').map(Number);
-    endT = Date.UTC(ey, em - 1, ed);
-  } else {
-    endT = cur + 86400000;
-  }
-  const days = [];
-  while (cur < endT && days.length < 60) {
-    const dt = new Date(cur);
-    days.push(fmtLocal(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate()));
-    cur += 86400000;
-  }
-  return days;
-}
-
 export default function CalendarView() {
   const { googleToken, reauth } = useAuth();
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth()); // 0-based
-  const [eventsByDay, setEventsByDay] = useState({});
+  // 予定は「日ごと」ではなく startDay〜endDay を持つ形で保持する。
+  // 連日の予定を1本のバーとして繋げて描くために必要。
+  const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [selectedDay, setSelectedDay] = useState(jstDay(now));
-  // バラシ撮影・祝日カレンダーの表示ON/OFF（初期は両方表示）
+  // バラシ・祝日カレンダーの表示ON/OFF（初期は両方表示）
   const [showTeardown, setShowTeardown] = useState(true);
   const [showHolidays, setShowHolidays] = useState(true);
 
@@ -98,36 +86,35 @@ export default function CalendarView() {
         })
       );
 
-      const map = {};
-      const push = (day, item) => {
-        (map[day] ||= []).push(item);
-      };
-
+      const list = [];
       results.flat().forEach(({ e, color, teardown, holiday }) => {
-        const title = e.summary || '(無題)';
+        const base = { title: e.summary || '(無題)', color, teardown, holiday };
+
         if (e.start?.date) {
-          // 終日イベント
-          eachDay(e.start.date, e.end?.date).forEach((day) =>
-            push(day, { title, color, teardown, holiday, allDay: true, sortKey: '' })
-          );
+          // 終日イベント。end.date は排他的なので前日を終了日にする。
+          const startDay = e.start.date;
+          let endDay = e.end?.date ? prevDay(e.end.date) : startDay;
+          if (endDay < startDay) endDay = startDay;
+          list.push({ ...base, allDay: true, time: '', sortKey: '', startDay, endDay });
         } else if (e.start?.dateTime) {
           const dt = new Date(e.start.dateTime);
-          const day = jstDay(dt);
+          const startDay = jstDay(dt);
+          let endDay = startDay;
+          if (e.end?.dateTime) {
+            // 終了が翌0:00ちょうどの予定を翌日扱いにしないよう1ms引いてから日付にする
+            const d2 = jstDay(new Date(new Date(e.end.dateTime).getTime() - 1));
+            if (d2 > startDay) endDay = d2;
+          }
           const time = dt.toLocaleTimeString('ja-JP', {
             hour: '2-digit',
             minute: '2-digit',
             timeZone: 'Asia/Tokyo',
           });
-          push(day, { title, color, teardown, holiday, allDay: false, time, sortKey: time });
+          list.push({ ...base, allDay: false, time, sortKey: time, startDay, endDay });
         }
       });
 
-      // 各日を時刻順に（終日→時刻イベント）
-      Object.values(map).forEach((arr) =>
-        arr.sort((a, b) => a.sortKey.localeCompare(b.sortKey))
-      );
-
-      setEventsByDay(map);
+      setEvents(list);
     } catch (err) {
       if (err.status === 401) {
         setError('カレンダートークンが期限切れです。再ログインしてください。');
@@ -171,20 +158,44 @@ export default function CalendarView() {
     setSelectedDay(jstDay(t));
   };
 
-  // グリッド生成（日曜始まり）
-  const firstWeekday = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const cells = [];
-  for (let i = 0; i < firstWeekday; i++) cells.push(null);
-  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
-  while (cells.length % 7 !== 0) cells.push(null);
+  // トグルに応じてバラシ・祝日を出し分ける（再取得せず表示だけ切り替え）
+  const visibleEvents = useMemo(
+    () =>
+      events.filter(
+        (ev) => (showTeardown || !ev.teardown) && (showHolidays || !ev.holiday)
+      ),
+    [events, showTeardown, showHolidays]
+  );
 
-  // トグルに応じてバラシ撮影・祝日を出し分ける（再取得せず表示だけ切り替え）
-  const visible = (ev) =>
-    (showTeardown || !ev.teardown) && (showHolidays || !ev.holiday);
+  // 日付をタップした時の一覧用。連日の予定は各日に出す。
+  const eventsByDay = useMemo(() => {
+    const map = {};
+    visibleEvents.forEach((ev) => {
+      expandDays(ev.startDay, ev.endDay).forEach((day) => {
+        (map[day] ||= []).push(ev);
+      });
+    });
+    Object.values(map).forEach((arr) =>
+      arr.sort((a, b) => a.sortKey.localeCompare(b.sortKey))
+    );
+    return map;
+  }, [visibleEvents]);
+
+  // グリッド生成（日曜始まり）→ 7日ずつの週に分ける
+  const weeks = useMemo(() => {
+    const firstWeekday = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const cells = [];
+    for (let i = 0; i < firstWeekday; i++) cells.push(null);
+    for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+    while (cells.length % 7 !== 0) cells.push(null);
+    const out = [];
+    for (let i = 0; i < cells.length; i += 7) out.push(cells.slice(i, i + 7));
+    return out;
+  }, [year, month]);
 
   const todayStr = jstDay(new Date());
-  const selectedEvents = (eventsByDay[selectedDay] || []).filter(visible);
+  const selectedEvents = eventsByDay[selectedDay] || [];
 
   return (
     <div className="cal-wrap">
@@ -230,46 +241,82 @@ export default function CalendarView() {
           ))}
         </div>
 
-        <div className="cal-grid">
-          {cells.map((d, i) => {
-            if (d === null) return <div key={i} className="cal-cell cal-empty" />;
-            const dayStr = fmtLocal(year, month, d);
-            const evs = (eventsByDay[dayStr] || []).filter(visible);
-            const wd = i % 7;
-            return (
-              <button
-                key={i}
-                className={
-                  'cal-cell' +
-                  (dayStr === todayStr ? ' cal-today' : '') +
-                  (dayStr === selectedDay ? ' cal-selected' : '')
-                }
-                onClick={() => setSelectedDay(dayStr)}
-              >
+        {weeks.map((week, wi) => {
+          const days = week.map((d) => (d === null ? null : fmtLocal(year, month, d)));
+          const segs = weekSegments(days, visibleEvents);
+          const lanes = laneCount(segs);
+          return (
+            <div
+              className="cal-week"
+              key={wi}
+              style={{
+                gridTemplateRows: lanes > 0 ? `auto repeat(${lanes}, 17px)` : 'auto',
+              }}
+            >
+              {/* 背景セル（日付タップ用）。段の数だけ縦に伸ばす */}
+              {week.map((d, i) =>
+                d === null ? (
+                  <div
+                    key={`bg${i}`}
+                    className="cal-cellbg cal-empty"
+                    style={{ gridColumn: i + 1, gridRow: '1 / -1' }}
+                  />
+                ) : (
+                  <button
+                    key={`bg${i}`}
+                    className={
+                      'cal-cellbg' +
+                      (days[i] === todayStr ? ' cal-today' : '') +
+                      (days[i] === selectedDay ? ' cal-selected' : '')
+                    }
+                    style={{ gridColumn: i + 1, gridRow: '1 / -1' }}
+                    onClick={() => setSelectedDay(days[i])}
+                    aria-label={`${month + 1}月${d}日`}
+                  />
+                )
+              )}
+
+              {/* 日付の数字 */}
+              {week.map((d, i) =>
+                d === null ? null : (
+                  <span
+                    key={`n${i}`}
+                    className={`cal-day-num${i === 0 ? ' cal-sun' : ''}${i === 6 ? ' cal-sat' : ''}${
+                      days[i] === todayStr ? ' cal-today-num' : ''
+                    }`}
+                    style={{ gridColumn: i + 1, gridRow: 1 }}
+                  >
+                    {d}
+                  </span>
+                )
+              )}
+
+              {/* 予定バー。連日はここで複数列にまたがる1本になる */}
+              {segs.map((s, si) => (
                 <span
-                  className={`cal-day-num${wd === 0 ? ' cal-sun' : ''}${wd === 6 ? ' cal-sat' : ''}`}
+                  key={si}
+                  className={
+                    'cal-bar' +
+                    (s.continuesLeft ? ' cal-bar-cl' : '') +
+                    (s.continuesRight ? ' cal-bar-cr' : '')
+                  }
+                  style={{
+                    gridColumn: `${s.col + 1} / span ${s.span}`,
+                    gridRow: s.lane + 2,
+                    background: s.ev.color,
+                    color: textOn(s.ev.color),
+                  }}
+                  title={s.ev.title}
                 >
-                  {d}
+                  {s.ev.title}
                 </span>
-                <span className="cal-chips">
-                  {evs.map((ev, k) => (
-                    <span
-                      key={k}
-                      className="cal-chip"
-                      style={{ background: ev.color, color: textOn(ev.color) }}
-                      title={ev.title}
-                    >
-                      {ev.title}
-                    </span>
-                  ))}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+              ))}
+            </div>
+          );
+        })}
 
         {loading && (
-          <p className="loading-text" style={{ marginTop: '12px' }}>
+          <p className="loading-text cal-loading">
             <span className="spinner" /> 読み込み中...
           </p>
         )}

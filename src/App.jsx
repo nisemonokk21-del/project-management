@@ -39,7 +39,7 @@ export default function App() {
           <LineScheduler />
         </div>
       </main>
-      <footer className="version-footer">v5.0 — カレンダーを画面端まで拡張し余白・隙間を排除、予定名の文字を拡大して読めるように</footer>
+      <footer className="version-footer">v5.1 — 連日の予定を1本のバーで繋げて表示（週をまたぐ予定も連結）</footer>
     </div>
   );
 }
