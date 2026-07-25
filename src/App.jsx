@@ -32,14 +32,14 @@ export default function App() {
         <div hidden={activeTab !== 'expenses'}>
           <ExpenseManager />
         </div>
+        {/* カレンダーとLINE返信は同じタブに統合。
+            カレンダーで空き状況を見ながら、そのまま下で返信を作れるようにする。 */}
         <div hidden={activeTab !== 'calendar'}>
           <CalendarView />
-        </div>
-        <div hidden={activeTab !== 'line'}>
           <LineScheduler />
         </div>
       </main>
-      <footer className="version-footer">v5.1 — 連日の予定を1本のバーで繋げて表示（週をまたぐ予定も連結）</footer>
+      <footer className="version-footer">v5.2 — カレンダーとLINE返信を1つのタブに統合（カレンダーの下で返信生成）</footer>
     </div>
   );
 }
