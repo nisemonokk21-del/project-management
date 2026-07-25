@@ -1,10 +1,11 @@
 import { useAuth } from '../contexts/AuthContext';
 
-// カレンダーとLINE返信は1つのタブに統合済み（カレンダーの下に返信生成が並ぶ）
+// カレンダーとLINE返信は1つのタブに統合済み（カレンダーの下に返信生成が並ぶ）。
+// 一番よく使う画面なのでカレンダーを先頭に置く。
 const TABS = [
+  { key: 'calendar', icon: '📅', label: 'カレンダー' },
   { key: 'project', icon: '📋', label: '案件登録' },
   { key: 'expenses', icon: '💰', label: '経費管理' },
-  { key: 'calendar', icon: '📅', label: 'カレンダー' },
 ];
 
 export default function Header({ activeTab, setActiveTab }) {
