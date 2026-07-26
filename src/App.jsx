@@ -40,7 +40,7 @@ export default function App() {
           <LineScheduler />
         </div>
       </main>
-      <footer className="version-footer">v5.4 — 祝日を被りから除外、仮案件はOK扱い（他の予定も既定OK・返信は「OK」のみ）、OK/NGボタンを右揃え</footer>
+      <footer className="version-footer">v5.5 — 案件の被りも1行で表示しOK/NGを選べるように（既定OK・返信には案件名を記載）</footer>
     </div>
   );
 }

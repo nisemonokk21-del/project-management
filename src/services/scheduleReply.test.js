@@ -4,9 +4,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   fixParsedYear,
-  isConfirmedShoot,
+  isShootConflict,
   isProvisionalShoot,
-  needsJudgement,
   initItemOk,
   dayStatus,
   replyLabelFor,
@@ -37,18 +36,15 @@ const mk = (date, conflicts, overrides = {}) => ({
 });
 
 // --- 被りの種別判定 ---
-test('種別判定: 決定撮影 / 仮撮影 / それ以外', () => {
-  assert.equal(isConfirmedShoot(conf('B', '決定撮影')), true);
-  assert.equal(isConfirmedShoot(conf('A', '仮撮影')), false);
+test('種別判定: 撮影案件（仮撮影/決定撮影）と仮案件', () => {
+  assert.equal(isShootConflict(conf('A', '仮撮影')), true);
+  assert.equal(isShootConflict(conf('B', '決定撮影')), true);
+  assert.equal(isShootConflict(conf('歯医者', 'プライベート')), false);
   assert.equal(isProvisionalShoot(conf('A', '仮撮影')), true);
   assert.equal(isProvisionalShoot(conf('B', '決定撮影')), false);
-  // 撮影系はOK/NGの判断が要らない
-  assert.equal(needsJudgement(conf('A', '仮撮影')), false);
-  assert.equal(needsJudgement(conf('B', '決定撮影')), false);
-  assert.equal(needsJudgement(conf('歯医者', 'プライベート')), true);
 });
 
-test('initItemOk: 撮影系は true、個人予定は既定 false(NG)', () => {
+test('initItemOk: 撮影案件は既定OK(true)、個人予定は既定NG(false)', () => {
   assert.deepEqual(
     initItemOk([conf('B', '決定撮影'), conf('歯医者', 'プライベート')]),
     [true, false]
@@ -68,40 +64,40 @@ test('被りなし: OK。dayNgを立てるとNG', () => {
   assert.equal(replyLabelFor(mk('2026-07-16', [], { dayNg: true })), 'NG');
 });
 
-// --- 決定撮影の被り: 案件名を載せる ---
-test('決定撮影のみ被り: 案件名を載せる（判断不要）', () => {
+// --- 撮影案件の被り: 既定OKで、案件名を返信に載せる ---
+test('撮影案件のみ被り: 既定OKで案件名を載せる', () => {
+  assert.equal(replyLabelFor(mk('2026-07-16', [conf('A映画', '仮撮影')])), 'A映画');
   assert.equal(replyLabelFor(mk('2026-07-16', [conf('Bドラマ', '決定撮影')])), 'Bドラマ');
   assert.equal(
-    replyLabelFor(
-      mk('2026-07-16', [conf('Bドラマ', '決定撮影'), conf('C映画', '決定撮影')])
-    ),
-    'Bドラマ、C映画'
+    replyLabelFor(mk('2026-07-16', [conf('A映画', '仮撮影'), conf('Bドラマ', '決定撮影')])),
+    'A映画、Bドラマ'
   );
 });
 
-// --- 仮案件（仮撮影）の被り: 「OK」とだけ書く ---
-test('仮案件のみ被り: 案件名は出さず OK とだけ書く', () => {
-  assert.equal(replyLabelFor(mk('2026-07-16', [conf('A映画', '仮撮影')])), 'OK');
+test('撮影案件をNGに切り替えたらその日はNG', () => {
+  const r = mk('2026-07-16', [conf('A映画', '仮撮影')]);
+  r.itemOk = [false];
+  assert.equal(dayStatus(r), 'ng');
+  assert.equal(replyLabelFor(r), 'NG');
 });
 
-test('仮案件＋個人予定: 個人も既定OKになり、その日はOK', () => {
+// --- 仮案件がある日は他の予定も既定OK ---
+test('仮案件＋個人予定: 個人も既定OKになり、案件名を載せる', () => {
   const r = mk('2026-07-16', [conf('A映画', '仮撮影'), conf('歯医者', 'プライベート')]);
-  assert.equal(dayStatus(r), 'ok');
-  assert.equal(replyLabelFor(r), 'OK');
+  assert.deepEqual(r.itemOk, [true, true]);
+  assert.equal(dayStatus(r), 'other');
+  assert.equal(replyLabelFor(r), 'A映画');
 });
 
-test('仮案件＋決定撮影: 決定撮影の名前だけ載せる', () => {
-  const r = mk('2026-07-16', [conf('A映画', '仮撮影'), conf('Bドラマ', '決定撮影')]);
-  assert.equal(replyLabelFor(r), 'Bドラマ');
+test('決定撮影＋個人予定: 個人は既定NGなのでその日はNG', () => {
+  const r = mk('2026-07-16', [conf('Bドラマ', '決定撮影'), conf('歯医者', 'プライベート')]);
+  assert.deepEqual(r.itemOk, [true, false]);
+  assert.equal(replyLabelFor(r), 'NG');
 });
 
 test('撮影の被り: dayNgを立てればNG', () => {
   assert.equal(
     replyLabelFor(mk('2026-07-16', [conf('A映画', '仮撮影')], { dayNg: true })),
-    'NG'
-  );
-  assert.equal(
-    replyLabelFor(mk('2026-07-16', [conf('Bドラマ', '決定撮影')], { dayNg: true })),
     'NG'
   );
 });
