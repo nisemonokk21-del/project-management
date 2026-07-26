@@ -4,7 +4,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   fixParsedYear,
-  isShootConflict,
+  isConfirmedShoot,
+  isProvisionalShoot,
+  needsJudgement,
   initItemOk,
   dayStatus,
   replyLabelFor,
@@ -34,17 +36,29 @@ const mk = (date, conflicts, overrides = {}) => ({
   ...overrides,
 });
 
-// --- isShootConflict / initItemOk ---
-test('isShootConflict: 仮撮影/決定撮影だけ true', () => {
-  assert.equal(isShootConflict(conf('A', '仮撮影')), true);
-  assert.equal(isShootConflict(conf('B', '決定撮影')), true);
-  assert.equal(isShootConflict(conf('歯医者', 'プライベート')), false);
+// --- 被りの種別判定 ---
+test('種別判定: 決定撮影 / 仮撮影 / それ以外', () => {
+  assert.equal(isConfirmedShoot(conf('B', '決定撮影')), true);
+  assert.equal(isConfirmedShoot(conf('A', '仮撮影')), false);
+  assert.equal(isProvisionalShoot(conf('A', '仮撮影')), true);
+  assert.equal(isProvisionalShoot(conf('B', '決定撮影')), false);
+  // 撮影系はOK/NGの判断が要らない
+  assert.equal(needsJudgement(conf('A', '仮撮影')), false);
+  assert.equal(needsJudgement(conf('B', '決定撮影')), false);
+  assert.equal(needsJudgement(conf('歯医者', 'プライベート')), true);
 });
 
-test('initItemOk: 撮影案件は true(含める)、個人予定は false(既定NG)', () => {
+test('initItemOk: 撮影系は true、個人予定は既定 false(NG)', () => {
   assert.deepEqual(
-    initItemOk([conf('A', '仮撮影'), conf('歯医者', 'プライベート')]),
+    initItemOk([conf('B', '決定撮影'), conf('歯医者', 'プライベート')]),
     [true, false]
+  );
+});
+
+test('initItemOk: 仮案件がある日は他の予定も既定OK', () => {
+  assert.deepEqual(
+    initItemOk([conf('A', '仮撮影'), conf('歯医者', 'プライベート'), conf('会議', '仕事')]),
+    [true, true, true]
   );
 });
 
@@ -54,18 +68,40 @@ test('被りなし: OK。dayNgを立てるとNG', () => {
   assert.equal(replyLabelFor(mk('2026-07-16', [], { dayNg: true })), 'NG');
 });
 
-// --- 撮影案件のみ被り ---
-test('撮影案件のみ被り: 案件名を載せる（判断不要）', () => {
-  assert.equal(replyLabelFor(mk('2026-07-16', [conf('A映画', '仮撮影')])), 'A映画');
+// --- 決定撮影の被り: 案件名を載せる ---
+test('決定撮影のみ被り: 案件名を載せる（判断不要）', () => {
+  assert.equal(replyLabelFor(mk('2026-07-16', [conf('Bドラマ', '決定撮影')])), 'Bドラマ');
   assert.equal(
-    replyLabelFor(mk('2026-07-16', [conf('A映画', '仮撮影'), conf('Bドラマ', '決定撮影')])),
-    'A映画、Bドラマ'
+    replyLabelFor(
+      mk('2026-07-16', [conf('Bドラマ', '決定撮影'), conf('C映画', '決定撮影')])
+    ),
+    'Bドラマ、C映画'
   );
 });
 
-test('撮影案件のみ被り: dayNgを立てればNG', () => {
+// --- 仮案件（仮撮影）の被り: 「OK」とだけ書く ---
+test('仮案件のみ被り: 案件名は出さず OK とだけ書く', () => {
+  assert.equal(replyLabelFor(mk('2026-07-16', [conf('A映画', '仮撮影')])), 'OK');
+});
+
+test('仮案件＋個人予定: 個人も既定OKになり、その日はOK', () => {
+  const r = mk('2026-07-16', [conf('A映画', '仮撮影'), conf('歯医者', 'プライベート')]);
+  assert.equal(dayStatus(r), 'ok');
+  assert.equal(replyLabelFor(r), 'OK');
+});
+
+test('仮案件＋決定撮影: 決定撮影の名前だけ載せる', () => {
+  const r = mk('2026-07-16', [conf('A映画', '仮撮影'), conf('Bドラマ', '決定撮影')]);
+  assert.equal(replyLabelFor(r), 'Bドラマ');
+});
+
+test('撮影の被り: dayNgを立てればNG', () => {
   assert.equal(
     replyLabelFor(mk('2026-07-16', [conf('A映画', '仮撮影')], { dayNg: true })),
+    'NG'
+  );
+  assert.equal(
+    replyLabelFor(mk('2026-07-16', [conf('Bドラマ', '決定撮影')], { dayNg: true })),
     'NG'
   );
 });
@@ -94,17 +130,17 @@ test('複数の個人被り: 全部OKならOK', () => {
   assert.equal(replyLabelFor(r), 'OK');
 });
 
-// --- 撮影案件＋個人予定が混在 ---
-test('撮影＋個人: 個人が1件でもNGならNG', () => {
-  const r = mk('2026-07-16', [conf('歯医者', 'プライベート'), conf('A映画', '仮撮影')]);
-  // 既定: 歯医者=false(NG), A映画=true → その日はNG
+// --- 決定撮影＋個人予定が混在 ---
+test('決定撮影＋個人: 個人が1件でもNGならNG', () => {
+  const r = mk('2026-07-16', [conf('歯医者', 'プライベート'), conf('Bドラマ', '決定撮影')]);
+  // 既定: 歯医者=false(NG), Bドラマ=true → その日はNG
   assert.equal(replyLabelFor(r), 'NG');
 });
 
-test('撮影＋個人: 個人を全部OKにすれば撮影案件名を載せる', () => {
-  const r = mk('2026-07-16', [conf('歯医者', 'プライベート'), conf('A映画', '仮撮影')]);
+test('決定撮影＋個人: 個人を全部OKにすれば案件名を載せる', () => {
+  const r = mk('2026-07-16', [conf('歯医者', 'プライベート'), conf('Bドラマ', '決定撮影')]);
   r.itemOk = [true, true];
-  assert.equal(replyLabelFor(r), 'A映画');
+  assert.equal(replyLabelFor(r), 'Bドラマ');
 });
 
 // --- generateReply: 連続日のまとめと全体の文面 ---
@@ -112,11 +148,11 @@ test('generateReply: 連続OKはまとめ、NG理由が違えば分ける', () =
   const reply = generateReply([
     mk('2026-07-16', []),
     mk('2026-07-17', []),
-    mk('2026-07-18', [conf('A映画', '仮撮影')]),
+    mk('2026-07-18', [conf('Bドラマ', '決定撮影')]),
     mk('2026-07-19', [conf('歯医者', 'プライベート')]), // 既定NG
   ]);
   assert.match(reply, /7\/16,17 OK/);
-  assert.match(reply, /7\/18 A映画/);
+  assert.match(reply, /7\/18 Bドラマ/);
   assert.match(reply, /7\/19 NG/);
 });
 

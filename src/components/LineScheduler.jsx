@@ -6,7 +6,9 @@ import {
   fixParsedYear,
   generateReply,
   initItemOk,
-  isShootConflict,
+  isConfirmedShoot,
+  isProvisionalShoot,
+  needsJudgement,
   dayStatus,
   replyLabelFor,
 } from '../services/scheduleReply';
@@ -413,9 +415,11 @@ export default function LineScheduler() {
               <p className="ls-hint">被りチェック対象カレンダー: {checkedCalNames.join('、')}</p>
             )}
             <ul className="ls-status-legend">
-              <li>撮影案件（仮撮影/決定撮影）の被り … そのまま案件名を返信に載せます（判断不要）</li>
-              <li>それ以外の予定の被り … 1件ずつ <b>OK/NG</b> を選びます</li>
+              <li><b>決定撮影</b>の被り … 案件名をそのまま返信に載せます（判断不要）</li>
+              <li><b>仮撮影（仮案件）</b>の被り … 返信は「OK」とだけ書きます。案件名は出しません</li>
+              <li>それ以外の予定の被り … 1件ずつ <b>OK/NG</b> を選びます（仮案件がある日は既定OK）</li>
               <li>その日に <b>1件でもNG</b> があれば、その日は「NG」で返信します</li>
+              <li>祝日・バラシは被りに含めません</li>
             </ul>
             <p className="ls-hint">
               変更したあと、下の返信文カードの「返信文を更新」でまとめて反映してください。
@@ -423,13 +427,19 @@ export default function LineScheduler() {
             <div className="ls-date-list">
               {dateResults.map((r, i) => {
                 const st = dayStatus(r);
-                const shootNames = (r.conflicts || [])
-                  .filter(isShootConflict)
+                // 決定撮影＝返信に案件名を載せる／仮撮影＝OK扱いで名前は出さない
+                const confirmedNames = (r.conflicts || [])
+                  .filter(isConfirmedShoot)
                   .map((c) => c.summary)
                   .filter(Boolean);
-                const nonShoot = (r.conflicts || [])
+                const provisionalNames = (r.conflicts || [])
+                  .filter(isProvisionalShoot)
+                  .map((c) => c.summary)
+                  .filter(Boolean);
+                // OK/NGの判断が要る被り（撮影系以外）
+                const judgeable = (r.conflicts || [])
                   .map((c, idx) => ({ c, idx }))
-                  .filter((x) => !isShootConflict(x.c));
+                  .filter((x) => needsJudgement(x.c));
                 return (
                   <div key={i} className={`ls-date-item ls-st-${st}`}>
                     <div className="ls-date-main">
@@ -443,15 +453,20 @@ export default function LineScheduler() {
                         </span>
                       </div>
 
-                      {shootNames.length > 0 && (
+                      {confirmedNames.length > 0 && (
                         <div className="ls-shoot-note">
-                          🎬 案件の被り（返信に記載）: {shootNames.join(' / ')}
+                          🎬 決定撮影（返信に記載）: {confirmedNames.join(' / ')}
+                        </div>
+                      )}
+                      {provisionalNames.length > 0 && (
+                        <div className="ls-provisional-note">
+                          📌 仮案件（OK扱い・返信には出しません）: {provisionalNames.join(' / ')}
                         </div>
                       )}
 
-                      {nonShoot.length > 0 ? (
+                      {judgeable.length > 0 ? (
                         <div className="ls-conflict-items">
-                          {nonShoot.map(({ c, idx }) => {
+                          {judgeable.map(({ c, idx }) => {
                             const ok = r.itemOk[idx] === true;
                             return (
                               <div key={idx} className="ls-conflict-item">
@@ -477,7 +492,7 @@ export default function LineScheduler() {
                           })}
                         </div>
                       ) : (
-                        // 個人予定の被りが無い日（空き / 撮影のみ）は日単位でOK/NG
+                        // 判断が要る被りが無い日（空き / 撮影のみ）は日単位でOK/NG
                         <div className="ls-seg ls-seg-day" role="group" aria-label="この日の扱い">
                           <button
                             className={`ls-seg-btn ls-seg-ok${!r.dayNg ? ' active' : ''}`}

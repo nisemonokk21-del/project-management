@@ -43,11 +43,14 @@ export const isHolidayCalendar = (cal) =>
   /holiday/i.test(cal.id || '') || /祝日/.test(calDisplayName(cal) || '');
 
 // 被りチェック対象のカレンダーだけに絞り込む。
-// バラシ撮影（kei.imagawa.a）はカレンダーごと除外する。
-// 祝日等のシステムカレンダーはあえて除外しない（共有カレンダーを取りこぼさないため。
-// 過去にallowlist方式で共有カレンダーを見落として被りが出なかった経緯がある）。
+// 除外するのは次の2つだけ:
+// - バラシ: 撮影後の記録用で、実際に予定が埋まっているわけではない
+// - 祝日  : 「祝日だから撮影できない」わけではないので被り扱いしない
+// それ以外は（共有カレンダーを取りこぼして被りを見落とさないよう）全部対象にする。
+// ※ 過去にallowlist方式で共有カレンダーを見落として被りが出なかった経緯があるため、
+//   名前の完全一致リストなどで絞り込まないこと。
 export function conflictCalendars(cals) {
-  return (cals || []).filter((c) => !isTeardownCalendar(c));
+  return (cals || []).filter((c) => !isTeardownCalendar(c) && !isHolidayCalendar(c));
 }
 
 // 被り判定にかける実予定だけを残す（キャンセル済みを除外）
