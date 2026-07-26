@@ -2,10 +2,12 @@
 // UI・DOM・ネットワークに一切依存しないので、scheduleReply.test.js で単体テストできる。
 // （被り判定まわりは過去に何度も壊れたため、ここをテストで固定して再発を防ぐ）
 
-// 撮影の被りは「確定」と「仮押さえ」で扱いが違う。
-// - 決定撮影: その日は本当に他案件で埋まっている → 返信に案件名を出す
-// - 仮撮影  : まだ仮押さえで確定ではない → 返信は「OK」とだけ書き、案件名は出さない
-export const CONFIRMED_SHOOT_CALENDAR_NAMES = new Set(['決定撮影']);
+// 「案件（撮影）」として被りの“名前”を返信文に出すカレンダー。
+// これ以外（個人的な用事など）が被った場合は、返信文では名前を出さず "NG" とだけ書く。
+export const SHOOT_CALENDAR_NAMES = new Set(['仮撮影', '決定撮影']);
+
+// そのうち「仮撮影（仮案件）」。仮案件が入っている日は元々押さえている日なので、
+// 同じ日の他の予定は既定OKにする（initItemOk 参照）。
 export const PROVISIONAL_SHOOT_CALENDAR_NAMES = new Set(['仮撮影']);
 
 // LINE解析が返した候補日の「年ずれ」対策。
@@ -23,9 +25,10 @@ export function fixParsedYear(dateStr, todayStr) {
   return s;
 }
 
-// 決定撮影（確定した他案件）の被りか
-export function isConfirmedShoot(conflict) {
-  return CONFIRMED_SHOOT_CALENDAR_NAMES.has(conflict?.calName);
+// 撮影案件（仮撮影/決定撮影）の被りか。
+// 撮影案件の被りは、返信文に案件名をそのまま載せる対象。
+export function isShootConflict(conflict) {
+  return SHOOT_CALENDAR_NAMES.has(conflict?.calName);
 }
 
 // 仮撮影（仮案件）の被りか
@@ -33,23 +36,17 @@ export function isProvisionalShoot(conflict) {
   return PROVISIONAL_SHOOT_CALENDAR_NAMES.has(conflict?.calName);
 }
 
-// OK/NGの判断が要る被りか（撮影系＝決定撮影・仮撮影は判断不要）
-export function needsJudgement(conflict) {
-  return !isConfirmedShoot(conflict) && !isProvisionalShoot(conflict);
-}
-
 // その日に仮案件（仮撮影）があるか
 export function hasProvisionalShoot(conflicts) {
   return (conflicts || []).some(isProvisionalShoot);
 }
 
-// 被った予定のうち「決定撮影」だけの名前一覧（重複除去）を返す。
-// 仮撮影は確定ではないので、ここには含めない（返信には出さない）。
-function confirmedShootNames(dateResult) {
+// 被った予定のうち「撮影案件」だけの名前一覧（重複除去）を返す。
+function shootConflictNames(dateResult) {
   return [
     ...new Set(
       (dateResult.conflicts || [])
-        .filter(isConfirmedShoot)
+        .filter(isShootConflict)
         .map((c) => c.summary)
         .filter(Boolean)
     ),
@@ -58,43 +55,42 @@ function confirmedShootNames(dateResult) {
 
 // 候補日ごとの初期の「各被りのOK/NG」状態を作る。
 // conflicts と同じ並びの boolean 配列（true=OK、false=NG）。
-// - 撮影系（決定撮影・仮撮影）→ true（判断不要）
-// - それ以外（個人の予定など）→ 既定はNG。
+// - 撮影案件（仮撮影・決定撮影）→ true（既定OK。画面上も OK と表示される）
+// - それ以外（個人の予定など）  → 既定はNG。
 //   ただし、その日に既に仮案件（仮撮影）が入っている場合は、
 //   その日は元々押さえている日なので他の予定も既定OKにする。
 export function initItemOk(conflicts) {
   const provisional = hasProvisionalShoot(conflicts);
-  return (conflicts || []).map((c) => (needsJudgement(c) ? provisional : true));
+  return (conflicts || []).map((c) => (isShootConflict(c) ? true : provisional));
 }
 
 // 候補日1日ぶんの判定。個別のOK/NG（itemOk）と日単位のNG（dayNg）から
 // 'ok' | 'ng' | 'other' を返す。
 // ルール:
 // - 日単位でNGにしていれば 'ng'
-// - 判断が要る被り（撮影系以外）が1件でもNGなら 'ng'
-// - 上記でNGにならず、決定撮影の被りがあれば 'other'（案件名を載せる）
-// - どれにも当たらなければ 'ok'（仮案件だけの日もここ＝「OK」と返信）
+// - 被りが1件でもNGなら 'ng'（撮影案件をNGにした場合も含む）
+// - 上記でNGにならず、撮影案件の被りがあれば 'other'（案件名を載せる）
+// - どれにも当たらなければ 'ok'
 export function dayStatus(dateResult) {
   if (dateResult.dayNg) return 'ng';
 
   const conflicts = dateResult.conflicts || [];
   const itemOk = dateResult.itemOk || [];
 
-  const anyNg = conflicts.some((c, i) => needsJudgement(c) && itemOk[i] !== true);
-  if (anyNg) return 'ng';
+  if (conflicts.some((_, i) => itemOk[i] !== true)) return 'ng';
 
-  return confirmedShootNames(dateResult).length > 0 ? 'other' : 'ok';
+  return shootConflictNames(dateResult).length > 0 ? 'other' : 'ok';
 }
 
 // 1日ぶんの返信ラベルを決める。
 // - 'ng'    → 'NG'（何と被ったかは返信文に出さない）
-// - 'other' → 被っている決定撮影の案件名を並べる
-// - 'ok'    → 'OK'（仮案件だけが入っている日もこちら。案件名は出さない）
+// - 'other' → 被っている撮影案件名を並べる
+// - 'ok'    → 'OK'
 export function replyLabelFor(dateResult) {
   const st = dayStatus(dateResult);
   if (st === 'ng') return 'NG';
   if (st === 'other') {
-    const names = confirmedShootNames(dateResult);
+    const names = shootConflictNames(dateResult);
     return names.length > 0 ? names.join('、') : '他案件';
   }
   return 'OK';

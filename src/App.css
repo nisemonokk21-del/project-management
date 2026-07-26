@@ -891,18 +891,21 @@ input:focus, select:focus {
 .ls-dr-ng { color: var(--danger); }
 .ls-dr-other { color: #ea580c; }
 
-.ls-shoot-note {
-  font-size: 12.5px;
-  color: #ea580c;
-  line-height: 1.5;
-  margin-top: 6px;
+/* 案件（仮撮影/決定撮影）の被り行。個人予定と見分けられるよう強調する */
+.ls-shoot-item {
+  background: #fff7ed;
+  box-shadow: inset 2px 0 0 #ea580c;
 }
-/* 仮案件（OK扱い・返信には出さない）の注記 */
-.ls-provisional-note {
-  font-size: 12.5px;
-  color: var(--gray-600);
-  line-height: 1.5;
-  margin-top: 6px;
+.ls-shoot-tag {
+  display: inline-block;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #ea580c;
+  background: #ffedd5;
+  border-radius: 4px;
+  padding: 1px 5px;
+  margin-right: 6px;
+  flex-shrink: 0;
 }
 
 .ls-conflict-items {

@@ -6,9 +6,7 @@ import {
   fixParsedYear,
   generateReply,
   initItemOk,
-  isConfirmedShoot,
-  isProvisionalShoot,
-  needsJudgement,
+  isShootConflict,
   dayStatus,
   replyLabelFor,
 } from '../services/scheduleReply';
@@ -415,9 +413,9 @@ export default function LineScheduler() {
               <p className="ls-hint">被りチェック対象カレンダー: {checkedCalNames.join('、')}</p>
             )}
             <ul className="ls-status-legend">
-              <li><b>決定撮影</b>の被り … 案件名をそのまま返信に載せます（判断不要）</li>
-              <li><b>仮撮影（仮案件）</b>の被り … 返信は「OK」とだけ書きます。案件名は出しません</li>
-              <li>それ以外の予定の被り … 1件ずつ <b>OK/NG</b> を選びます（仮案件がある日は既定OK）</li>
+              <li>被っている予定を1件ずつ <b>OK/NG</b> で判断します</li>
+              <li><b>🎬 案件</b>（仮撮影/決定撮影）… 既定OK。OKのままなら案件名を返信に載せます</li>
+              <li>それ以外の予定 … 既定NG。ただし<b>仮案件がある日は既定OK</b></li>
               <li>その日に <b>1件でもNG</b> があれば、その日は「NG」で返信します</li>
               <li>祝日・バラシは被りに含めません</li>
             </ul>
@@ -427,19 +425,9 @@ export default function LineScheduler() {
             <div className="ls-date-list">
               {dateResults.map((r, i) => {
                 const st = dayStatus(r);
-                // 決定撮影＝返信に案件名を載せる／仮撮影＝OK扱いで名前は出さない
-                const confirmedNames = (r.conflicts || [])
-                  .filter(isConfirmedShoot)
-                  .map((c) => c.summary)
-                  .filter(Boolean);
-                const provisionalNames = (r.conflicts || [])
-                  .filter(isProvisionalShoot)
-                  .map((c) => c.summary)
-                  .filter(Boolean);
-                // OK/NGの判断が要る被り（撮影系以外）
-                const judgeable = (r.conflicts || [])
-                  .map((c, idx) => ({ c, idx }))
-                  .filter((x) => needsJudgement(x.c));
+                // 被りは案件も個人予定も同じ行形式で並べ、右端でOK/NGを切り替える。
+                // 案件（仮撮影/決定撮影）は既定OKなので、OKの状態がそのまま表示される。
+                const conflicts = r.conflicts || [];
                 return (
                   <div key={i} className={`ls-date-item ls-st-${st}`}>
                     <div className="ls-date-main">
@@ -453,24 +441,18 @@ export default function LineScheduler() {
                         </span>
                       </div>
 
-                      {confirmedNames.length > 0 && (
-                        <div className="ls-shoot-note">
-                          🎬 決定撮影（返信に記載）: {confirmedNames.join(' / ')}
-                        </div>
-                      )}
-                      {provisionalNames.length > 0 && (
-                        <div className="ls-provisional-note">
-                          📌 仮案件（OK扱い・返信には出しません）: {provisionalNames.join(' / ')}
-                        </div>
-                      )}
-
-                      {judgeable.length > 0 ? (
+                      {conflicts.length > 0 ? (
                         <div className="ls-conflict-items">
-                          {judgeable.map(({ c, idx }) => {
+                          {conflicts.map((c, idx) => {
                             const ok = r.itemOk[idx] === true;
+                            const shoot = isShootConflict(c);
                             return (
-                              <div key={idx} className="ls-conflict-item">
+                              <div
+                                key={idx}
+                                className={`ls-conflict-item${shoot ? ' ls-shoot-item' : ''}`}
+                              >
                                 <span className="ls-conflict-name">
+                                  {shoot && <span className="ls-shoot-tag">🎬 案件</span>}
                                   {c.summary || '他の予定'}
                                 </span>
                                 <div className="ls-seg" role="group" aria-label="この予定の扱い">
@@ -492,7 +474,7 @@ export default function LineScheduler() {
                           })}
                         </div>
                       ) : (
-                        // 判断が要る被りが無い日（空き / 撮影のみ）は日単位でOK/NG
+                        // 被りが無い日は日単位でOK/NG
                         <div className="ls-seg ls-seg-day" role="group" aria-label="この日の扱い">
                           <button
                             className={`ls-seg-btn ls-seg-ok${!r.dayNg ? ' active' : ''}`}
