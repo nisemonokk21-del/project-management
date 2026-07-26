@@ -40,7 +40,7 @@ export default function App() {
           <LineScheduler />
         </div>
       </main>
-      <footer className="version-footer">v5.3 — カレンダータブを一番左にし、起動時に表示するタブに変更</footer>
+      <footer className="version-footer">v5.4 — 祝日を被りから除外、仮案件はOK扱い（他の予定も既定OK・返信は「OK」のみ）、OK/NGボタンを右揃え</footer>
     </div>
   );
 }

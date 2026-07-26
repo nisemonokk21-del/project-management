@@ -897,6 +897,13 @@ input:focus, select:focus {
   line-height: 1.5;
   margin-top: 6px;
 }
+/* 仮案件（OK扱い・返信には出さない）の注記 */
+.ls-provisional-note {
+  font-size: 12.5px;
+  color: var(--gray-600);
+  line-height: 1.5;
+  margin-top: 6px;
+}
 
 .ls-conflict-items {
   display: flex;
@@ -922,7 +929,11 @@ input:focus, select:focus {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.ls-seg-day { margin-top: 8px; }
+/* 被りが無い日の日単位OK/NGも、1件ずつのボタンと同じく右端に揃える */
+.ls-seg-day {
+  margin-top: 8px;
+  align-self: flex-end;
+}
 
 .ls-reply-textarea {
   width: 100%;

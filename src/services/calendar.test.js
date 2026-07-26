@@ -48,14 +48,14 @@ test('isHolidayCalendar: 通常カレンダーは false', () => {
   assert.equal(isHolidayCalendar({ id: 'primary', summary: '仮撮影' }), false);
 });
 
-// --- conflictCalendars: バラシだけ除外し、他は残す ---
-test('conflictCalendars: バラシは除外、本番の共有カレンダーは残す', () => {
+// --- conflictCalendars: バラシと祝日を除外し、他は残す ---
+test('conflictCalendars: バラシと祝日は除外、本番の共有カレンダーは残す', () => {
   const cals = [
     { id: 'primary', summary: '自分' },
     { id: 'kei.imagawa.a@gmail.com', summary: 'kei.imagawa.a@gmail.com' }, // 本番の共有 → 残す
     { id: 'barashi@group.calendar.google.com', summary: 'バラシ' }, // バラシ → 除外
-    { id: 'ja.japanese#holiday@group.v.calendar.google.com', summary: '日本の祝日' }, // 祝日 → 残す
+    { id: 'ja.japanese#holiday@group.v.calendar.google.com', summary: '日本の祝日' }, // 祝日 → 除外
   ];
   const names = conflictCalendars(cals).map((c) => c.summary);
-  assert.deepEqual(names, ['自分', 'kei.imagawa.a@gmail.com', '日本の祝日']);
+  assert.deepEqual(names, ['自分', 'kei.imagawa.a@gmail.com']);
 });
