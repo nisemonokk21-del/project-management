@@ -150,13 +150,16 @@ function nextDay(dateStr) {
 export function buildProvisionalShootingEvent(clientName, dateStr, options = {}) {
   const { location, description } = options;
   return {
-    summary: `【仮撮影】${clientName}`,
+    // 「仮撮影」カレンダーに入っている時点で仮撮影と分かるので、
+    // 【仮撮影】のような接頭辞は付けず案件名だけにする。
+    summary: clientName,
     ...(location ? { location } : {}),
     ...(description ? { description } : {}),
     start: { date: dateStr },
     // Google の終日イベントは end.date が排他的（翌日を指定する）。
     // start と同日だと API が 400 で拒否するため翌日にする。
     end: { date: nextDay(dateStr) },
-    colorId: '6', // tangerine
+    // colorId は指定しない。指定するとカレンダーの色を上書きしてしまうため、
+    // 未指定にして「仮撮影」カレンダー自体の色をそのまま使う。
   };
 }
