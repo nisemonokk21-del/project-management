@@ -7,6 +7,7 @@ import {
   isTeardownCalendar,
   isHolidayCalendar,
   conflictCalendars,
+  buildProvisionalShootingEvent,
 } from './calendar.js';
 
 // --- isTeardownCalendar: 「バラシ」カレンダー判定 ---
@@ -58,4 +59,34 @@ test('conflictCalendars: バラシと祝日は除外、本番の共有カレン�
   ];
   const names = conflictCalendars(cals).map((c) => c.summary);
   assert.deepEqual(names, ['自分', 'kei.imagawa.a@gmail.com']);
+});
+
+// --- buildProvisionalShootingEvent: 仮撮影カレンダーへ登録するイベント ---
+test('仮撮影イベント: 件名は案件名のみ（【仮撮影】を付けない）', () => {
+  const ev = buildProvisionalShootingEvent('日程テスト', '2026-08-16');
+  assert.equal(ev.summary, '日程テスト');
+});
+
+test('仮撮影イベント: colorIdを指定せずカレンダーの色を使う', () => {
+  const ev = buildProvisionalShootingEvent('日程テスト', '2026-08-16');
+  assert.equal('colorId' in ev, false);
+});
+
+test('仮撮影イベント: 終日イベントで end.date は翌日（排他的）', () => {
+  const ev = buildProvisionalShootingEvent('日程テスト', '2026-08-16');
+  assert.deepEqual(ev.start, { date: '2026-08-16' });
+  assert.deepEqual(ev.end, { date: '2026-08-17' });
+});
+
+test('仮撮影イベント: 場所・内容は指定した時だけ入れる', () => {
+  const plain = buildProvisionalShootingEvent('案件', '2026-08-16');
+  assert.equal('location' in plain, false);
+  assert.equal('description' in plain, false);
+
+  const full = buildProvisionalShootingEvent('案件', '2026-08-16', {
+    location: '豊洲スタジオ',
+    description: '原文ママ',
+  });
+  assert.equal(full.location, '豊洲スタジオ');
+  assert.equal(full.description, '原文ママ');
 });

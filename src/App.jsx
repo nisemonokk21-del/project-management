@@ -40,7 +40,7 @@ export default function App() {
           <LineScheduler />
         </div>
       </main>
-      <footer className="version-footer">v5.5 — 案件の被りも1行で表示しOK/NGを選べるように（既定OK・返信には案件名を記載）</footer>
+      <footer className="version-footer">v5.6 — 仮撮影の登録を案件名のみ・カレンダーの色に変更（【仮撮影】接頭辞とオレンジ固定色をやめた）</footer>
     </div>
   );
 }
