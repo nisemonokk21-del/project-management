@@ -135,6 +135,16 @@ export async function createEventInCalendar(token, calendarId, event) {
   );
 }
 
+// 既存の予定を部分更新する（説明欄への電車スケジュール上書きに使う）。
+// patch には更新したいフィールドだけを渡す（例: { description }）。
+export async function patchEvent(token, calendarId, eventId, patch) {
+  return apiFetch(
+    `${BASE}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
+    token,
+    { method: 'PATCH', body: JSON.stringify(patch) }
+  );
+}
+
 // "YYYY-MM-DD" → 翌日の "YYYY-MM-DD"（終日イベントの end.date は排他的なため）
 function nextDay(dateStr) {
   const [y, m, d] = dateStr.split('-').map(Number);

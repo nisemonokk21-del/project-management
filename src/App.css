@@ -651,6 +651,51 @@ input:focus, select:focus {
 }
 
 /* ===== Transit links (乗換検索) ===== */
+/* 電車スケジュールタブ：案件（予定）の選択リスト */
+.sched-event-list { display: flex; flex-direction: column; gap: 8px; }
+.sched-event-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid var(--gray-200);
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.sched-event-item:active { background: var(--gray-100); }
+.sched-event-item.selected {
+  border-color: var(--primary);
+  background: var(--primary-light);
+}
+.sched-event-time {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gray-600);
+  min-width: 42px;
+}
+.sched-event-title {
+  flex: 1 1 auto;
+  font-size: 14px;
+  color: var(--gray-900);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sched-event-cal {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--gray-500);
+  background: var(--gray-100);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
 .transit-section { gap: 8px; }
 .transit-links { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
 .transit-link {
