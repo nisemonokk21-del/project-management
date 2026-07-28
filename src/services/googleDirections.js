@@ -1,14 +1,20 @@
 const ORIGIN = '新桜台駅';
 
 // Maps JavaScript API のパスは `/maps/api/js`。
-// `/maps/api/javascript` は404が返り、script の onerror（＝「読み込みに失敗しました」）になる。
+// `/maps/api/javascript` は404が返り、script の onerror になる。
 const MAPS_BASE = 'https://maps.googleapis.com/maps/api/js';
+
+// callback が来ないまま固まるのを防ぐ（電波が悪い / ブロックされている場合）
+const LOAD_TIMEOUT_MS = 20000;
 
 // 読み込みは1回だけ。Promise を使い回して、連打しても二重に script を挿さないようにする。
 let loadPromise = null;
 
-function injectScript() {
-  if (window.google?.maps) return Promise.resolve();
+function bootstrap() {
+  // 既にブートストラップ済みなら何もしない
+  if (window.google?.maps?.importLibrary || window.google?.maps?.DirectionsService) {
+    return Promise.resolve();
+  }
 
   const key = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
   if (!key) {
@@ -18,41 +24,67 @@ function injectScript() {
   }
 
   return new Promise((resolve, reject) => {
-    const script = document.createElement('script');
+    const cbName = '__initGoogleMaps';
+    let timer = null;
+    const done = (fn, arg) => {
+      if (timer) clearTimeout(timer);
+      delete window[cbName];
+      fn(arg);
+    };
+
+    // ここが要点。/maps/api/js が返すのは13KB程度の小さなローダーで、
+    // 本体（main.js / routes.js）はその後さらに非同期で読み込まれる。
+    // そのため script.onload の時点では DirectionsService も importLibrary
+    // もまだ存在せず、onload で解決すると「初期化に失敗」になる。
+    // callback が呼ばれた時点が「API 準備完了」なので、そちらで解決する。
+    window[cbName] = () => done(resolve);
+
     const params = new URLSearchParams({
       key,
-      // loading=async を付けないとコンソールに警告が出る（推奨の読み込み方式）
+      // 推奨の読み込み方式。付けないとコンソールに警告が出る
       loading: 'async',
+      callback: cbName,
+      // DirectionsService は routes に入っている。先に読ませておくと
+      // callback 時点で google.maps 直下から使える。
       libraries: 'routes',
       language: 'ja',
       region: 'JP',
     });
+
+    const script = document.createElement('script');
     script.src = `${MAPS_BASE}?${params}`;
     script.async = true;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error('Google Maps の読み込みに失敗しました'));
+    script.onerror = () =>
+      done(reject, new Error('Google Maps の読み込みに失敗しました'));
+    timer = setTimeout(
+      () => done(reject, new Error('Google Maps の読み込みがタイムアウトしました')),
+      LOAD_TIMEOUT_MS
+    );
     document.head.appendChild(script);
   });
 }
 
-async function loadMaps() {
+// DirectionsService を取り出す。
+// loading=async ではクラスが google.maps 直下に生えるとは限らないため、
+// importLibrary の「戻り値」から受け取るのが正しい。グローバルは後方互換の保険。
+async function getDirectionsService() {
   if (!loadPromise) {
-    // 失敗したら次回もう一度やり直せるように、reject 時はキャッシュを捨てる
-    loadPromise = injectScript().catch((e) => {
+    // 失敗したら次回やり直せるように、reject 時はキャッシュを捨てる
+    loadPromise = bootstrap().catch((e) => {
       loadPromise = null;
       throw e;
     });
   }
   await loadPromise;
 
-  // loading=async では google.maps が段階的に構築されるため、
-  // DirectionsService を使う前に routes ライブラリの読み込みを待つ。
-  if (!window.google?.maps?.DirectionsService && window.google?.maps?.importLibrary) {
-    await window.google.maps.importLibrary('routes');
+  if (window.google?.maps?.importLibrary) {
+    const routes = await window.google.maps.importLibrary('routes');
+    if (routes?.DirectionsService) return new routes.DirectionsService();
   }
-  if (!window.google?.maps?.DirectionsService) {
-    throw new Error('Google Maps の初期化に失敗しました');
+  if (window.google?.maps?.DirectionsService) {
+    return new window.google.maps.DirectionsService();
   }
+  throw new Error('Google Maps の初期化に失敗しました');
 }
 
 // status ごとに原因が分かるメッセージを返す（キー制限やAPI未有効化に気付けるように）
@@ -72,19 +104,19 @@ function messageForStatus(status) {
 }
 
 export async function fetchDepartureTime(destination, dateStr, timeStr) {
-  await loadMaps();
+  const service = await getDirectionsService();
 
   const [year, month, day] = dateStr.split('-').map(Number);
   const [hour, minute] = timeStr.split(':').map(Number);
   const arrivalTime = new Date(year, month - 1, day, hour, minute);
 
-  const service = new window.google.maps.DirectionsService();
   return new Promise((resolve, reject) => {
     service.route(
       {
         origin: ORIGIN,
         destination,
-        travelMode: window.google.maps.TravelMode.TRANSIT,
+        // google.maps.TravelMode が未定義でも動くよう文字列で指定する
+        travelMode: 'TRANSIT',
         transitOptions: { arrivalTime },
       },
       (result, status) => {

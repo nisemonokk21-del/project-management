@@ -34,7 +34,7 @@ export default function App() {
           <LineScheduler />
         </div>
       </main>
-      <footer className="version-footer">v6.1 — 「自動で取得」の修正（Google Maps のURLが /maps/api/javascript で404だったのを /maps/api/js に。出発時刻の変換ミスも修正）</footer>
+      <footer className="version-footer">v6.2 — 「自動で取得」の再修正（script の onload ではなく Maps API の callback を待つように。onload 時点では本体が未読込で初期化に失敗していた）</footer>
     </div>
   );
 }
