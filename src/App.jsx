@@ -34,7 +34,7 @@ export default function App() {
           <LineScheduler />
         </div>
       </main>
-      <footer className="version-footer">v6.0 — 案件登録タブを電車スケジュールに作り直し（カレンダーから案件を選択→予定の説明欄に電車時刻を上書き。手入力・被りチェック・案件の重複登録を廃止）</footer>
+      <footer className="version-footer">v6.1 — 「自動で取得」の修正（Google Maps のURLが /maps/api/javascript で404だったのを /maps/api/js に。出発時刻の変換ミスも修正）</footer>
     </div>
   );
 }
