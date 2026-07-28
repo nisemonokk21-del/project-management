@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 // 一番よく使う画面なのでカレンダーを先頭に置く。
 const TABS = [
   { key: 'calendar', icon: '📅', label: 'カレンダー' },
-  { key: 'project', icon: '📋', label: '案件登録' },
+  { key: 'project', icon: '🚃', label: '電車' },
   { key: 'expenses', icon: '💰', label: '経費管理' },
 ];
 

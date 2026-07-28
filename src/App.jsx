@@ -3,7 +3,6 @@ import { useAuth } from './contexts/AuthContext';
 import Header from './components/Header';
 import Login from './components/Login';
 import ProjectForm from './components/ProjectForm';
-import ProjectResult from './components/ProjectResult';
 import ExpenseManager from './components/ExpenseManager';
 import LineScheduler from './components/LineScheduler';
 import CalendarView from './components/CalendarView';
@@ -13,7 +12,6 @@ export default function App() {
   const { user } = useAuth();
   // 起動時は先頭タブ（カレンダー＋LINE返信）を開く
   const [activeTab, setActiveTab] = useState('calendar');
-  const [result, setResult] = useState(null);
 
   if (!user) return <Login />;
 
@@ -24,11 +22,7 @@ export default function App() {
       <Header activeTab={activeTab} setActiveTab={setActiveTab} />
       <main className="main">
         <div hidden={activeTab !== 'project'}>
-          {result ? (
-            <ProjectResult result={result} onReset={() => setResult(null)} />
-          ) : (
-            <ProjectForm onResult={setResult} />
-          )}
+          <ProjectForm />
         </div>
         <div hidden={activeTab !== 'expenses'}>
           <ExpenseManager />
@@ -40,7 +34,7 @@ export default function App() {
           <LineScheduler />
         </div>
       </main>
-      <footer className="version-footer">v5.6 — 仮撮影の登録を案件名のみ・カレンダーの色に変更（【仮撮影】接頭辞とオレンジ固定色をやめた）</footer>
+      <footer className="version-footer">v6.0 — 案件登録タブを電車スケジュールに作り直し（カレンダーから案件を選択→予定の説明欄に電車時刻を上書き。手入力・被りチェック・案件の重複登録を廃止）</footer>
     </div>
   );
 }
