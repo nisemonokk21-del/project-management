@@ -9,7 +9,17 @@ const TABS = [
 ];
 
 export default function Header({ activeTab, setActiveTab }) {
-  const { user, logout } = useAuth();
+  const { user, logout, switchAccount } = useAuth();
+
+  // 別アカウントへの切り替え。ポップアップを閉じただけの時は何も起きないようにする。
+  const handleSwitch = async () => {
+    try {
+      await switchAccount();
+    } catch (err) {
+      if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') return;
+      alert(`アカウントの切り替えに失敗しました: ${err.code || err.message}`);
+    }
+  };
 
   return (
     <>
@@ -22,6 +32,12 @@ export default function Header({ activeTab, setActiveTab }) {
                 <img src={user.photoURL} alt="" className="avatar" referrerPolicy="no-referrer" />
               )}
               <span className="user-name">{user.displayName}</span>
+              {/* どのアカウントで使っているかすぐ分かるようにメールアドレスも出す。
+                  名前はスマホでは隠れるが、こちらは残す（アカウントの取り違えに気付けるように） */}
+              {user.email && (
+                <span className="user-email" title={user.email}>{user.email}</span>
+              )}
+              <button onClick={handleSwitch} className="logout-btn">切替</button>
               <button onClick={logout} className="logout-btn">ログアウト</button>
             </div>
           )}
