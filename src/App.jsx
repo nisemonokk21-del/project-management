@@ -34,7 +34,7 @@ export default function App() {
           <LineScheduler />
         </div>
       </main>
-      <footer className="version-footer">v6.2 — 「自動で取得」の再修正（script の onload ではなく Maps API の callback を待つように。onload 時点では本体が未読込で初期化に失敗していた）</footer>
+      <footer className="version-footer">v6.3 — 仮撮影カレンダー登録で連日の候補日を1件の予定にまとめるように（離れた日は従来どおり別々の予定）</footer>
     </div>
   );
 }

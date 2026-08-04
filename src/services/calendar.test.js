@@ -8,6 +8,7 @@ import {
   isHolidayCalendar,
   conflictCalendars,
   buildProvisionalShootingEvent,
+  groupConsecutiveDates,
 } from './calendar.js';
 
 // --- isTeardownCalendar: 「バラシ」カレンダー判定 ---
@@ -89,4 +90,47 @@ test('仮撮影イベント: 場所・内容は指定した時だけ入れる', 
   });
   assert.equal(full.location, '豊洲スタジオ');
   assert.equal(full.description, '原文ママ');
+});
+
+test('仮撮影イベント: endDate を渡すと連日の1件になる（end.date は最終日の翌日）', () => {
+  const ev = buildProvisionalShootingEvent('日程テスト', '2026-08-16', { endDate: '2026-08-18' });
+  assert.deepEqual(ev.start, { date: '2026-08-16' });
+  assert.deepEqual(ev.end, { date: '2026-08-19' });
+});
+
+// --- groupConsecutiveDates: 連日をまとめる ---
+test('連日まとめ: 連続する日は1つのまとまりになる', () => {
+  assert.deepEqual(groupConsecutiveDates(['2026-08-16', '2026-08-17', '2026-08-18']), [
+    { start: '2026-08-16', end: '2026-08-18' },
+  ]);
+});
+
+test('連日まとめ: 日が飛んだら別のまとまりになる', () => {
+  assert.deepEqual(groupConsecutiveDates(['2026-08-16', '2026-08-17', '2026-08-20']), [
+    { start: '2026-08-16', end: '2026-08-17' },
+    { start: '2026-08-20', end: '2026-08-20' },
+  ]);
+});
+
+test('連日まとめ: 順不同・重複でも正しくまとまる', () => {
+  assert.deepEqual(groupConsecutiveDates(['2026-08-17', '2026-08-16', '2026-08-17']), [
+    { start: '2026-08-16', end: '2026-08-17' },
+  ]);
+});
+
+test('連日まとめ: 月をまたぐ連日もつながる', () => {
+  assert.deepEqual(groupConsecutiveDates(['2026-08-31', '2026-09-01']), [
+    { start: '2026-08-31', end: '2026-09-01' },
+  ]);
+});
+
+test('連日まとめ: 年をまたぐ連日もつながる', () => {
+  assert.deepEqual(groupConsecutiveDates(['2026-12-31', '2027-01-01']), [
+    { start: '2026-12-31', end: '2027-01-01' },
+  ]);
+});
+
+test('連日まとめ: 空なら空配列', () => {
+  assert.deepEqual(groupConsecutiveDates([]), []);
+  assert.deepEqual(groupConsecutiveDates(undefined), []);
 });
