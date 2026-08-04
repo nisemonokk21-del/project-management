@@ -34,7 +34,7 @@ export default function App() {
           <LineScheduler />
         </div>
       </main>
-      <footer className="version-footer">v6.3 — 仮撮影カレンダー登録で連日の候補日を1件の予定にまとめるように（離れた日は従来どおり別々の予定）</footer>
+      <footer className="version-footer">v6.4 — ログイン時に必ずGoogleのアカウント選択画面を出すように修正（同じアカウントに自動ログインして切り替えられない問題）。ヘッダーに「切替」ボタンとログイン中のアドレス表示を追加</footer>
     </div>
   );
 }

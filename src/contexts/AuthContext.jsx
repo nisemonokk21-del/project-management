@@ -50,6 +50,32 @@ function clearStoredToken() {
   }
 }
 
+const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar';
+
+// ログイン用のプロバイダ。必ずGoogleのアカウント選択画面を出す。
+// prompt を指定しないと、ブラウザにGoogleのセッションが1つしか無い場合
+// （ホーム画面ショートカットのように単独のブラウザ扱いになる環境では特に）
+// 選択画面がスキップされ、そのアカウントで自動的にログインしてしまう。
+// そのため「ログアウト→ログイン」しても毎回同じアカウントに戻ってしまい、
+// 別アカウントに切り替えられなかった。
+function selectAccountProvider() {
+  const provider = new GoogleAuthProvider();
+  provider.addScope(CALENDAR_SCOPE);
+  provider.setCustomParameters({ prompt: 'select_account' });
+  return provider;
+}
+
+// カレンダー用トークンを取り直すだけのプロバイダ。
+// 今ログイン中のアカウントを login_hint で指定して、
+// 毎回アカウントを選び直さずに済むようにする（別アカウントに化けるのも防げる）。
+// ログイン中のアカウントが分からない場合だけ選択画面を出す。
+function reauthProvider(email) {
+  const provider = new GoogleAuthProvider();
+  provider.addScope(CALENDAR_SCOPE);
+  provider.setCustomParameters(email ? { login_hint: email } : { prompt: 'select_account' });
+  return provider;
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   // 保存済みトークンがあれば初期値として復元する（開き直しても再ログイン不要にする）
@@ -72,9 +98,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   const login = async () => {
-    const provider = new GoogleAuthProvider();
-    provider.addScope('https://www.googleapis.com/auth/calendar');
-    const result = await signInWithPopup(auth, provider);
+    const result = await signInWithPopup(auth, selectAccountProvider());
     const credential = GoogleAuthProvider.credentialFromResult(result);
     if (credential?.accessToken) setGoogleToken(credential.accessToken);
   };
@@ -84,9 +108,19 @@ export function AuthProvider({ children }) {
     setGoogleToken(null);
   };
 
+  // 別のアカウントに切り替える。
+  // 先に前のアカウントのトークンを捨ててから、アカウント選択画面付きでログインし直す。
+  // （ログアウトしてログインし直す手間なく切り替えられるようにするためのもの）
+  const switchAccount = async () => {
+    await signOut(auth);
+    setGoogleToken(null);
+    const result = await signInWithPopup(auth, selectAccountProvider());
+    const credential = GoogleAuthProvider.credentialFromResult(result);
+    if (credential?.accessToken) setGoogleToken(credential.accessToken);
+  };
+
   const reauth = async () => {
-    const provider = new GoogleAuthProvider();
-    provider.addScope('https://www.googleapis.com/auth/calendar');
+    const provider = reauthProvider(auth.currentUser?.email);
     const result = await signInWithPopup(auth, provider);
     const credential = GoogleAuthProvider.credentialFromResult(result);
     const token = credential?.accessToken || null;
@@ -95,7 +129,9 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, googleToken, login, logout, reauth, loading }}>
+    <AuthContext.Provider
+      value={{ user, googleToken, login, logout, switchAccount, reauth, loading }}
+    >
       {!loading && children}
     </AuthContext.Provider>
   );
