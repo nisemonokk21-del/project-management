@@ -155,10 +155,29 @@ function nextDay(dateStr) {
   return `${yy}-${mm}-${dd}`;
 }
 
-// dateStr: "YYYY-MM-DD"
-// options: { location, description } — 案件内容の編集結果をカレンダーに反映する
+// 日付文字列("YYYY-MM-DD")の配列を、連日ごとのまとまりに分ける。
+// 例: ['8/16','8/17','8/20'] → [{start:'8/16', end:'8/17'}, {start:'8/20', end:'8/20'}]
+// end は「その日を含む」終端（排他的な end.date への変換は buildProvisionalShootingEvent 側で行う）。
+// 同じ案件の連日撮影を1件の予定として登録するために使う。
+export function groupConsecutiveDates(dates) {
+  const sorted = [...new Set(dates || [])].sort();
+  const groups = [];
+  for (const date of sorted) {
+    const last = groups[groups.length - 1];
+    if (last && nextDay(last.end) === date) {
+      last.end = date;
+    } else {
+      groups.push({ start: date, end: date });
+    }
+  }
+  return groups;
+}
+
+// dateStr: "YYYY-MM-DD"（開始日）
+// options: { location, description, endDate } — 案件内容の編集結果をカレンダーに反映する。
+//   endDate は連日をまとめる時の最終日（その日を含む）。省略時は dateStr と同じ＝1日だけ。
 export function buildProvisionalShootingEvent(clientName, dateStr, options = {}) {
-  const { location, description } = options;
+  const { location, description, endDate } = options;
   return {
     // 「仮撮影」カレンダーに入っている時点で仮撮影と分かるので、
     // 【仮撮影】のような接頭辞は付けず案件名だけにする。
@@ -166,9 +185,9 @@ export function buildProvisionalShootingEvent(clientName, dateStr, options = {})
     ...(location ? { location } : {}),
     ...(description ? { description } : {}),
     start: { date: dateStr },
-    // Google の終日イベントは end.date が排他的（翌日を指定する）。
-    // start と同日だと API が 400 で拒否するため翌日にする。
-    end: { date: nextDay(dateStr) },
+    // Google の終日イベントは end.date が排他的（最終日の翌日を指定する）。
+    // start と同日だと API が 400 で拒否するため、1日だけの場合も翌日にする。
+    end: { date: nextDay(endDate || dateStr) },
     // colorId は指定しない。指定するとカレンダーの色を上書きしてしまうため、
     // 未指定にして「仮撮影」カレンダー自体の色をそのまま使う。
   };

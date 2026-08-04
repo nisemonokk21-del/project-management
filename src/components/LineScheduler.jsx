@@ -15,6 +15,7 @@ import {
   getEventsFromCalendar,
   createEventInCalendar,
   buildProvisionalShootingEvent,
+  groupConsecutiveDates,
   calDisplayName as calName,
   conflictCalendars,
   realEvents,
@@ -222,6 +223,13 @@ export default function LineScheduler() {
     setReplyStale(false);
   };
 
+  // 登録対象はNG以外の日（OK・他案件）。NGの日だけ登録しない。
+  const okDates = dateResults.filter((r) => dayStatus(r) !== 'ng');
+  // 連日はまとめて1件の予定にするので、実際に作られる予定の数はグループ数になる。
+  const okGroups = groupConsecutiveDates(okDates.map((r) => r.date));
+  const okCount = okDates.length; // 登録される日数
+  const eventCount = okGroups.length; // 作られる予定の件数（連日はまとめて1件）
+
   const handleRegister = async () => {
     if (!provisionalCal) return;
     setRegistering(true);
@@ -230,18 +238,22 @@ export default function LineScheduler() {
       const token = await getToken();
       if (!token) throw new Error('Googleログインが必要です。一度ログアウトして再ログインしてください。');
 
-      // 登録対象はNG以外の日（OK・他案件）。NGの日だけ登録しない。
-      const okDates = dateResults.filter((r) => dayStatus(r) !== 'ng');
       // 案件内容フォームで編集した内容をそのままカレンダーに反映する
       const name = projectInfo.name.trim() || parsed?.clientName || '案件';
       const location = projectInfo.location.trim();
       const description = projectInfo.content.trim();
+      // 連日は1件の予定にまとめる（8/16・8/17なら「8/16〜8/17」の終日予定1件）。
+      // 日が飛んでいるところで分かれるので、離れた候補日は別々の予定になる。
       await Promise.all(
-        okDates.map((r) =>
+        okGroups.map((g) =>
           createEventInCalendar(
             token,
             provisionalCal.id,
-            buildProvisionalShootingEvent(name, r.date, { location, description })
+            buildProvisionalShootingEvent(name, g.start, {
+              location,
+              description,
+              endDate: g.end,
+            })
           )
         )
       );
@@ -282,9 +294,6 @@ export default function LineScheduler() {
     setRegistered(false);
     setRegisterError('');
   };
-
-  // 登録件数（NG以外の日）
-  const okCount = dateResults.filter((r) => dayStatus(r) !== 'ng').length;
 
   return (
     <div className="line-scheduler">
@@ -418,6 +427,7 @@ export default function LineScheduler() {
               <li>それ以外の予定 … 既定NG。ただし<b>仮案件がある日は既定OK</b></li>
               <li>その日に <b>1件でもNG</b> があれば、その日は「NG」で返信します</li>
               <li>祝日・バラシは被りに含めません</li>
+              <li>登録するとき、<b>連日の候補日は1件の予定にまとめます</b>（離れた日は別々の予定）</li>
             </ul>
             <p className="ls-hint">
               変更したあと、下の返信文カードの「返信文を更新」でまとめて反映してください。
@@ -500,7 +510,10 @@ export default function LineScheduler() {
               <div className="ls-register-row" style={{ marginTop: '14px' }}>
                 {registerError && <div className="error" style={{ marginBottom: '10px' }}>⚠️ {registerError}</div>}
                 {registered ? (
-                  <div className="ok-text">✅ 仮撮影カレンダーに{okCount}件登録しました</div>
+                  <div className="ok-text">
+                    ✅ 仮撮影カレンダーに{eventCount}件登録しました
+                    {eventCount !== okCount && `（連日をまとめて${okCount}日分）`}
+                  </div>
                 ) : (
                   <button
                     className="btn-primary"
@@ -510,7 +523,7 @@ export default function LineScheduler() {
                     {registering ? (
                       <><span className="spinner" /> 登録中...</>
                     ) : (
-                      `📅 仮撮影カレンダーに登録する（${okCount}件）`
+                      `📅 仮撮影カレンダーに登録する（${eventCount}件）`
                     )}
                   </button>
                 )}
